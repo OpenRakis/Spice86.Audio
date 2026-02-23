@@ -8,27 +8,26 @@ on:
 
 jobs:
   build:
-
     strategy:
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
       fail-fast: false
-    
+
     runs-on: ${{ matrix.os }}
 
     steps:
-    - uses: actions/checkout@v1
-      
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v1
-      with:
-        dotnet-version: '10.0.x'
+      - uses: actions/checkout@v1
 
-    - name: Package NuGet
-      working-directory: ./src/Spice86.Audio
-      run: dotnet pack --include-symbols --include-source --configuration Release -p:NoWarn=NU5104
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: "10.0.x"
 
-    - name: Upload NuGet Spice86.Audio
-      if: github.ref == 'refs/heads/main' && matrix.os == 'ubuntu-latest'
-      working-directory: ./src/Spice86.Audio/bin/Release
-      run: dotnet nuget push Spice86.Audio.11.1.0.nupkg --api-key "${{ secrets.NUGET_API_KEY }}" --source "https://api.nuget.org/v3/index.json" --skip-duplicate
+      - name: Package NuGet
+        working-directory: ./src/Spice86.Audio
+        run: dotnet pack --include-symbols --include-source --configuration Release -p:NoWarn=1591
+
+      - name: Upload NuGet Spice86.Audio
+        if: github.ref == 'refs/heads/main' && matrix.os == 'ubuntu-latest'
+        working-directory: ./src/Spice86.Audio/bin/Release
+        run: dotnet nuget push Spice86.Audio.11.1.0.nupkg --api-key "${{ secrets.NUGET_API_KEY }}" --source "https://api.nuget.org/v3/index.json" --skip-duplicate
