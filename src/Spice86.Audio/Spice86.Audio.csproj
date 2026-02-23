@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    </PropertyGroup>
+    <!-- Properties geared towards NuGet -->
+    <PropertyGroup>
+        <PackageId>Spice86.Audio</PackageId>
+    </PropertyGroup>
+    <ItemGroup>
+      <PackageReference Include="Spice86.Shared" />
+    </ItemGroup>
+</Project>
