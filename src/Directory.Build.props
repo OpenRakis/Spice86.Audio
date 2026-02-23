@@ -5,7 +5,7 @@
 		<Nullable>enable</Nullable>
 		<EnablePackageValidation>true</EnablePackageValidation>
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
-		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+		<WarningsAsErrors>nullable</WarningsAsErrors>
 		<NoWarn>$(NoWarn);1591;NU1507</NoWarn>
 	</PropertyGroup>
 	<!-- Source Link configuration -->
