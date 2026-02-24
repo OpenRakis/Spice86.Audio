@@ -4,7 +4,7 @@ Integrates ports from DOSBox Staging and SDL2, Speex, IIR Filters, and reasmpler
 
 ## License and Credits
 
-This project makes use of the following third-party software, as C# ports:
+This project makes use of parts of the following third-party software, as C# ports:
 
 - **SDL (Simple DirectMedia Layer)**
   - Licensed under the [zlib License](LICENSE.SDL).
