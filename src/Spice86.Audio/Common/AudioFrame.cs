@@ -1,3 +1,4 @@
+// SPDX-FileCopyrightText: 2022-2025 The DOSBox Staging Team
 namespace Spice86.Audio.Common;
 
 using System.Runtime.InteropServices;
@@ -8,7 +9,8 @@ using System.Runtime.InteropServices;
 ///     Reference: DOSBox audio_frame.h - struct AudioFrame { float left; float right; }
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
-public struct AudioFrame : IEquatable<AudioFrame> {
+public struct AudioFrame : IEquatable<AudioFrame>
+{
     /// <summary>
     ///     Sample amplitude for the left channel.
     /// </summary>
@@ -24,7 +26,8 @@ public struct AudioFrame : IEquatable<AudioFrame> {
     /// </summary>
     /// <param name="left">The left channel sample value.</param>
     /// <param name="right">The right channel sample value.</param>
-    public AudioFrame(float left, float right) {
+    public AudioFrame(float left, float right)
+    {
         Left = left;
         Right = right;
     }
@@ -33,7 +36,8 @@ public struct AudioFrame : IEquatable<AudioFrame> {
     ///     Initializes a new instance of the <see cref="AudioFrame" /> struct with the same value for both channels.
     /// </summary>
     /// <param name="mono">The sample value applied to both channels.</param>
-    public AudioFrame(float mono) {
+    public AudioFrame(float mono)
+    {
         Left = mono;
         Right = mono;
     }
@@ -43,7 +47,8 @@ public struct AudioFrame : IEquatable<AudioFrame> {
     /// </summary>
     /// <param name="left">The 16-bit left channel sample value.</param>
     /// <param name="right">The 16-bit right channel sample value.</param>
-    public AudioFrame(short left, short right) {
+    public AudioFrame(short left, short right)
+    {
         Left = left;
         Right = right;
     }
@@ -52,7 +57,8 @@ public struct AudioFrame : IEquatable<AudioFrame> {
     ///     Initializes a new instance of the <see cref="AudioFrame" /> struct with the same 16-bit value for both channels.
     /// </summary>
     /// <param name="mono">The 16-bit sample value applied to both channels.</param>
-    public AudioFrame(short mono) {
+    public AudioFrame(short mono)
+    {
         Left = mono;
         Right = mono;
     }
@@ -62,15 +68,19 @@ public struct AudioFrame : IEquatable<AudioFrame> {
     /// </summary>
     /// <param name="index">0 for the left channel, 1 for the right channel.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="index" /> is not 0 or 1.</exception>
-    public float this[int index] {
+    public float this[int index]
+    {
         readonly get =>
-            index switch {
+            index switch
+            {
                 0 => Left,
                 1 => Right,
                 _ => throw new ArgumentOutOfRangeException(nameof(index))
             };
-        set {
-            switch (index) {
+        set
+        {
+            switch (index)
+            {
                 case 0:
                     Left = value;
                     break;
@@ -89,7 +99,8 @@ public struct AudioFrame : IEquatable<AudioFrame> {
     /// <param name="left">The first frame to compare.</param>
     /// <param name="right">The second frame to compare.</param>
     /// <returns><c>true</c> if both channel values are identical; otherwise, <c>false</c>.</returns>
-    public static bool operator ==(AudioFrame left, AudioFrame right) {
+    public static bool operator ==(AudioFrame left, AudioFrame right)
+    {
         // ReSharper disable CompareOfFloatsByEqualityOperator
         return left.Left == right.Left && left.Right == right.Right;
         // ReSharper restore CompareOfFloatsByEqualityOperator
@@ -101,7 +112,8 @@ public struct AudioFrame : IEquatable<AudioFrame> {
     /// <param name="left">The first frame to compare.</param>
     /// <param name="right">The second frame to compare.</param>
     /// <returns><c>true</c> if any channel values differ; otherwise, <c>false</c>.</returns>
-    public static bool operator !=(AudioFrame left, AudioFrame right) {
+    public static bool operator !=(AudioFrame left, AudioFrame right)
+    {
         return !(left == right);
     }
 
@@ -111,7 +123,8 @@ public struct AudioFrame : IEquatable<AudioFrame> {
     /// <param name="left">The first frame.</param>
     /// <param name="right">The second frame.</param>
     /// <returns>An <see cref="AudioFrame" /> containing the summed channel values.</returns>
-    public static AudioFrame operator +(AudioFrame left, AudioFrame right) {
+    public static AudioFrame operator +(AudioFrame left, AudioFrame right)
+    {
         return new AudioFrame(left.Left + right.Left, left.Right + right.Right);
     }
 
@@ -121,7 +134,8 @@ public struct AudioFrame : IEquatable<AudioFrame> {
     /// <param name="frame">The frame to scale.</param>
     /// <param name="gain">The gain applied to both channels.</param>
     /// <returns>An <see cref="AudioFrame" /> with scaled samples.</returns>
-    public static AudioFrame operator *(AudioFrame frame, float gain) {
+    public static AudioFrame operator *(AudioFrame frame, float gain)
+    {
         return new AudioFrame(frame.Left * gain, frame.Right * gain);
     }
 
@@ -131,7 +145,8 @@ public struct AudioFrame : IEquatable<AudioFrame> {
     /// <param name="gain">The gain applied to both channels.</param>
     /// <param name="frame">The frame to scale.</param>
     /// <returns>An <see cref="AudioFrame" /> with scaled samples.</returns>
-    public static AudioFrame operator *(float gain, AudioFrame frame) {
+    public static AudioFrame operator *(float gain, AudioFrame frame)
+    {
         return frame * gain;
     }
 
@@ -141,7 +156,8 @@ public struct AudioFrame : IEquatable<AudioFrame> {
     /// <param name="frame">The frame to scale.</param>
     /// <param name="gain">The per-channel gain.</param>
     /// <returns>An <see cref="AudioFrame" /> with scaled samples.</returns>
-    public static AudioFrame operator *(AudioFrame frame, AudioFrame gain) {
+    public static AudioFrame operator *(AudioFrame frame, AudioFrame gain)
+    {
         return new AudioFrame(frame.Left * gain.Left, frame.Right * gain.Right);
     }
 
@@ -150,7 +166,8 @@ public struct AudioFrame : IEquatable<AudioFrame> {
     /// </summary>
     /// <param name="other">The frame to add.</param>
     /// <returns>An <see cref="AudioFrame" /> containing the summed channel values.</returns>
-    public readonly AudioFrame Add(AudioFrame other) {
+    public readonly AudioFrame Add(AudioFrame other)
+    {
         return this + other;
     }
 
@@ -159,7 +176,8 @@ public struct AudioFrame : IEquatable<AudioFrame> {
     /// </summary>
     /// <param name="gain">The gain applied to both channels.</param>
     /// <returns>An <see cref="AudioFrame" /> with scaled samples.</returns>
-    public readonly AudioFrame Multiply(float gain) {
+    public readonly AudioFrame Multiply(float gain)
+    {
         return this * gain;
     }
 
@@ -168,22 +186,26 @@ public struct AudioFrame : IEquatable<AudioFrame> {
     /// </summary>
     /// <param name="gain">The per-channel gain.</param>
     /// <returns>An <see cref="AudioFrame" /> with scaled samples.</returns>
-    public readonly AudioFrame Multiply(AudioFrame gain) {
+    public readonly AudioFrame Multiply(AudioFrame gain)
+    {
         return this * gain;
     }
 
     /// <inheritdoc />
-    public override bool Equals(object? obj) {
+    public override bool Equals(object? obj)
+    {
         return obj is AudioFrame other && this == other;
     }
 
     /// <inheritdoc />
-    public override int GetHashCode() {
+    public override int GetHashCode()
+    {
         return HashCode.Combine(Left, Right);
     }
 
     /// <inheritdoc />
-    public bool Equals(AudioFrame other) {
+    public bool Equals(AudioFrame other)
+    {
         return Left.Equals(other.Left) && Right.Equals(other.Right);
     }
 }

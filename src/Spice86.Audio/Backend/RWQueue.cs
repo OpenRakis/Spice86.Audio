@@ -1,4 +1,5 @@
-﻿namespace Spice86.Audio.Backend;
+﻿// SPDX-FileCopyrightText: 2022-2025 The DOSBox Staging Team
+namespace Spice86.Audio.Backend;
 
 using System;
 using System.Threading;
@@ -18,7 +19,8 @@ using System.Threading;
 /// Uses a circular buffer internally for O(1) enqueue/dequeue operations.
 /// </remarks>
 /// <typeparam name="T">The element type stored in the queue.</typeparam>
-public sealed class RWQueue<T> where T : struct {
+public sealed class RWQueue<T> where T : struct
+{
     // Circular buffer implementation matching std::deque semantics
     private T[] _buffer;
     private int _head;  // Read position (front of queue)
@@ -32,12 +34,14 @@ public sealed class RWQueue<T> where T : struct {
     /// Moves items from <paramref name="source"/> into the circular buffer at <c>_tail</c>,
     /// handling wrap-around. Clears the source span and advances <c>_tail</c> and <c>_count</c>.
     /// </summary>
-    private void MoveIn(Span<T> source) {
+    private void MoveIn(Span<T> source)
+    {
         int numItems = source.Length;
         int firstSegment = Math.Min(numItems, _capacity - _tail);
         source[..firstSegment].CopyTo(_buffer.AsSpan(_tail, firstSegment));
         int secondSegment = numItems - firstSegment;
-        if (secondSegment > 0) {
+        if (secondSegment > 0)
+        {
             source.Slice(firstSegment, secondSegment).CopyTo(_buffer.AsSpan(0, secondSegment));
         }
         source.Clear();
@@ -49,16 +53,19 @@ public sealed class RWQueue<T> where T : struct {
     /// Moves items from the circular buffer at <c>_head</c> into <paramref name="target"/>,
     /// handling wrap-around. Clears the buffer region and advances <c>_head</c> and <c>_count</c>.
     /// </summary>
-    private void MoveOut(Span<T> target) {
+    private void MoveOut(Span<T> target)
+    {
         int numItems = target.Length;
         int firstSegment = Math.Min(numItems, _capacity - _head);
         _buffer.AsSpan(_head, firstSegment).CopyTo(target[..firstSegment]);
         int secondSegment = numItems - firstSegment;
-        if (secondSegment > 0) {
+        if (secondSegment > 0)
+        {
             _buffer.AsSpan(0, secondSegment).CopyTo(target.Slice(firstSegment, secondSegment));
         }
         _buffer.AsSpan(_head, firstSegment).Clear();
-        if (secondSegment > 0) {
+        if (secondSegment > 0)
+        {
             _buffer.AsSpan(0, secondSegment).Clear();
         }
         _head = (_head + numItems) % _capacity;
@@ -69,7 +76,8 @@ public sealed class RWQueue<T> where T : struct {
     /// Initializes a new queue with the specified capacity.
     /// </summary>
     /// <param name="capacity">Maximum number of items the queue can hold.</param>
-    public RWQueue(int capacity) {
+    public RWQueue(int capacity)
+    {
         _buffer = new T[capacity];
         _capacity = capacity;
     }
@@ -79,14 +87,18 @@ public sealed class RWQueue<T> where T : struct {
     /// This operation reallocates the buffer if capacity changes.
     /// </summary>
     /// <param name="newCapacity">The new capacity.</param>
-    public void Resize(int newCapacity) {
-        lock (_mutex) {
-            if (newCapacity == _capacity) {
+    public void Resize(int newCapacity)
+    {
+        lock (_mutex)
+        {
+            if (newCapacity == _capacity)
+            {
                 return;
             }
             T[] newBuffer = new T[newCapacity];
             int itemsToCopy = Math.Min(_count, newCapacity);
-            for (int i = 0; i < itemsToCopy; i++) {
+            for (int i = 0; i < itemsToCopy; i++)
+            {
                 newBuffer[i] = _buffer[(_head + i) % _buffer.Length];
             }
             _buffer = newBuffer;
@@ -100,9 +112,12 @@ public sealed class RWQueue<T> where T : struct {
     /// <summary>
     /// Returns the current number of items in the queue.
     /// </summary>
-    public int Size {
-        get {
-            lock (_mutex) {
+    public int Size
+    {
+        get
+        {
+            lock (_mutex)
+            {
                 return _count;
             }
         }
@@ -111,9 +126,12 @@ public sealed class RWQueue<T> where T : struct {
     /// <summary>
     /// Returns the maximum capacity of the queue.
     /// </summary>
-    public int MaxCapacity {
-        get {
-            lock (_mutex) {
+    public int MaxCapacity
+    {
+        get
+        {
+            lock (_mutex)
+            {
                 return _capacity;
             }
         }
@@ -122,9 +140,12 @@ public sealed class RWQueue<T> where T : struct {
     /// <summary>
     /// Returns true if the queue contains no items.
     /// </summary>
-    public bool IsEmpty {
-        get {
-            lock (_mutex) {
+    public bool IsEmpty
+    {
+        get
+        {
+            lock (_mutex)
+            {
                 return _count == 0;
             }
         }
@@ -133,9 +154,12 @@ public sealed class RWQueue<T> where T : struct {
     /// <summary>
     /// Returns true if the queue is at capacity.
     /// </summary>
-    public bool IsFull {
-        get {
-            lock (_mutex) {
+    public bool IsFull
+    {
+        get
+        {
+            lock (_mutex)
+            {
                 return _count >= _capacity;
             }
         }
@@ -144,9 +168,12 @@ public sealed class RWQueue<T> where T : struct {
     /// <summary>
     /// Returns true if the queue has not been stopped.
     /// </summary>
-    public bool IsRunning {
-        get {
-            lock (_mutex) {
+    public bool IsRunning
+    {
+        get
+        {
+            lock (_mutex)
+            {
                 return _isRunning;
             }
         }
@@ -155,7 +182,8 @@ public sealed class RWQueue<T> where T : struct {
     /// <summary>
     /// Returns the fill percentage of the queue (0–100).
     /// </summary>
-    public float GetPercentFull() {
+    public float GetPercentFull()
+    {
         float curLevel = Size;
         float maxLevel = _capacity;
         return 100.0f * curLevel / maxLevel;
@@ -164,8 +192,10 @@ public sealed class RWQueue<T> where T : struct {
     /// <summary>
     /// Re-enables the queue after a <see cref="Stop" /> call.
     /// </summary>
-    public void Start() {
-        lock (_mutex) {
+    public void Start()
+    {
+        lock (_mutex)
+        {
             _isRunning = true;
         }
     }
@@ -173,9 +203,12 @@ public sealed class RWQueue<T> where T : struct {
     /// <summary>
     /// Stops the queue, unblocking any waiting producers and consumers.
     /// </summary>
-    public void Stop() {
-        lock (_mutex) {
-            if (!_isRunning) {
+    public void Stop()
+    {
+        lock (_mutex)
+        {
+            if (!_isRunning)
+            {
                 return;
             }
             _isRunning = false;
@@ -186,8 +219,10 @@ public sealed class RWQueue<T> where T : struct {
     /// <summary>
     /// Removes all items from the queue and notifies waiting producers.
     /// </summary>
-    public void Clear() {
-        lock (_mutex) {
+    public void Clear()
+    {
+        lock (_mutex)
+        {
             _head = 0;
             _tail = 0;
             _count = 0;
@@ -201,13 +236,17 @@ public sealed class RWQueue<T> where T : struct {
     /// </summary>
     /// <param name="item">The item to enqueue.</param>
     /// <returns>True if the item was enqueued; false if the queue was stopped.</returns>
-    public bool Enqueue(T item) {
-        lock (_mutex) {
-            while (_isRunning && _count >= _capacity) {
+    public bool Enqueue(T item)
+    {
+        lock (_mutex)
+        {
+            while (_isRunning && _count >= _capacity)
+            {
                 Monitor.Wait(_mutex);
             }
 
-            if (_isRunning) {
+            if (_isRunning)
+            {
                 _buffer[_tail] = item;
                 _tail = (_tail + 1) % _capacity;
                 _count++;
@@ -223,9 +262,12 @@ public sealed class RWQueue<T> where T : struct {
     /// </summary>
     /// <param name="item">The item to enqueue.</param>
     /// <returns>True if the item was enqueued; false otherwise.</returns>
-    public bool NonblockingEnqueue(T item) {
-        lock (_mutex) {
-            if (!_isRunning || _count >= _capacity) {
+    public bool NonblockingEnqueue(T item)
+    {
+        lock (_mutex)
+        {
+            if (!_isRunning || _count >= _capacity)
+            {
                 return false;
             }
             _buffer[_tail] = item;
@@ -241,13 +283,17 @@ public sealed class RWQueue<T> where T : struct {
     /// </summary>
     /// <param name="success">Set to true if an item was dequeued.</param>
     /// <returns>The dequeued item, or default if none available.</returns>
-    public T Dequeue(out bool success) {
-        lock (_mutex) {
-            while (_isRunning && _count == 0) {
+    public T Dequeue(out bool success)
+    {
+        lock (_mutex)
+        {
+            while (_isRunning && _count == 0)
+            {
                 Monitor.Wait(_mutex);
             }
 
-            if (_count > 0) {
+            if (_count > 0)
+            {
                 T item = _buffer[_head];
                 _buffer[_head] = default;
                 _head = (_head + 1) % _capacity;
@@ -267,7 +313,8 @@ public sealed class RWQueue<T> where T : struct {
     /// </summary>
     /// <param name="source">Source span to read items from. Will be cleared after enqueueing.</param>
     /// <returns>Number of items actually enqueued.</returns>
-    public int BulkEnqueue(Span<T> source) {
+    public int BulkEnqueue(Span<T> source)
+    {
         return BulkEnqueue(source, source.Length);
     }
 
@@ -278,28 +325,35 @@ public sealed class RWQueue<T> where T : struct {
     /// <param name="source">Source span to read items from. Will be cleared after enqueueing.</param>
     /// <param name="numRequested">Number of items to enqueue.</param>
     /// <returns>Number of items actually enqueued.</returns>
-    public int BulkEnqueue(Span<T> source, int numRequested) {
+    public int BulkEnqueue(Span<T> source, int numRequested)
+    {
         const int minItems = 1;
         int sourceOffset = 0;
         int numRemaining = numRequested;
 
-        while (numRemaining > 0) {
-            lock (_mutex) {
+        while (numRemaining > 0)
+        {
+            lock (_mutex)
+            {
                 int freeCapacity = _capacity - _count;
                 int numItems = Math.Clamp(freeCapacity, minItems, numRemaining);
 
-                while (_isRunning && _capacity - _count < numItems) {
+                while (_isRunning && _capacity - _count < numItems)
+                {
                     Monitor.Wait(_mutex);
                 }
 
-                if (_isRunning) {
+                if (_isRunning)
+                {
                     numItems = Math.Min(_capacity - _count, numRemaining);
                     MoveIn(source.Slice(sourceOffset, numItems));
 
                     Monitor.Pulse(_mutex);
                     sourceOffset += numItems;
                     numRemaining -= numItems;
-                } else {
+                }
+                else
+                {
                     break;
                 }
             }
@@ -315,7 +369,8 @@ public sealed class RWQueue<T> where T : struct {
     /// <param name="offset">Starting offset in the source array.</param>
     /// <param name="count">Number of items to enqueue.</param>
     /// <returns>Number of items actually enqueued.</returns>
-    public int BulkEnqueue(T[] data, int offset, int count) {
+    public int BulkEnqueue(T[] data, int offset, int count)
+    {
         return BulkEnqueue(data.AsSpan(offset, count), count);
     }
 
@@ -324,7 +379,8 @@ public sealed class RWQueue<T> where T : struct {
     /// </summary>
     /// <param name="source">Source span to read items from. Will be cleared after enqueueing.</param>
     /// <returns>Number of items actually enqueued.</returns>
-    public int NonblockingBulkEnqueue(Span<T> source) {
+    public int NonblockingBulkEnqueue(Span<T> source)
+    {
         return NonblockingBulkEnqueue(source, source.Length);
     }
 
@@ -335,9 +391,12 @@ public sealed class RWQueue<T> where T : struct {
     /// <param name="source">Source span to read items from. Will be cleared after enqueueing.</param>
     /// <param name="numRequested">Number of items to enqueue.</param>
     /// <returns>Number of items actually enqueued.</returns>
-    public int NonblockingBulkEnqueue(Span<T> source, int numRequested) {
-        lock (_mutex) {
-            if (!_isRunning || _count >= _capacity) {
+    public int NonblockingBulkEnqueue(Span<T> source, int numRequested)
+    {
+        lock (_mutex)
+        {
+            if (!_isRunning || _count >= _capacity)
+            {
                 return 0;
             }
 
@@ -356,27 +415,34 @@ public sealed class RWQueue<T> where T : struct {
     /// <param name="target">Destination span for dequeued items.</param>
     /// <param name="numRequested">Number of items to dequeue.</param>
     /// <returns>Number of items actually dequeued.</returns>
-    public int BulkDequeue(Span<T> target, int numRequested) {
+    public int BulkDequeue(Span<T> target, int numRequested)
+    {
         int targetOffset = 0;
         int numRemaining = numRequested;
 
-        while (numRemaining > 0) {
-            lock (_mutex) {
+        while (numRemaining > 0)
+        {
+            lock (_mutex)
+            {
                 const int minItems = 1;
                 int numItems = Math.Clamp(_count, minItems, numRemaining);
 
-                while (_isRunning && _count < numItems) {
+                while (_isRunning && _count < numItems)
+                {
                     Monitor.Wait(_mutex);
                 }
 
-                if (_isRunning || _count > 0) {
+                if (_isRunning || _count > 0)
+                {
                     numItems = Math.Min(_count, numRemaining);
                     MoveOut(target.Slice(targetOffset, numItems));
 
                     Monitor.Pulse(_mutex);
                     targetOffset += numItems;
                     numRemaining -= numItems;
-                } else {
+                }
+                else
+                {
                     break;
                 }
             }
@@ -391,7 +457,8 @@ public sealed class RWQueue<T> where T : struct {
     /// <param name="target">Destination array for dequeued items.</param>
     /// <param name="numRequested">Number of items to dequeue.</param>
     /// <returns>Number of items actually dequeued.</returns>
-    public int BlockingBulkDequeue(T[] target, int numRequested) {
+    public int BlockingBulkDequeue(T[] target, int numRequested)
+    {
         return BulkDequeue(target, numRequested);
     }
 }
