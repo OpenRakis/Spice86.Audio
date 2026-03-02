@@ -40,7 +40,6 @@ namespace Spice86.Audio.Filters.Speex;
 /// Maintains exact algorithm fidelity to the original resample.c.
 /// </summary>
 public sealed class SpeexResamplerCSharp {
-    // Error codes
     private const int RESAMPLER_ERR_SUCCESS = 0;
     private const int RESAMPLER_ERR_ALLOC_FAILED = 1;
     private const int RESAMPLER_ERR_BAD_STATE = 2;
@@ -50,7 +49,6 @@ public sealed class SpeexResamplerCSharp {
 
     private const double M_PI = 3.14159265358979323846;
 
-    // Kaiser window tables - exact from resample.c
     private static readonly double[] kaiser12_table = new double[68] {
         0.99859849, 1.00000000, 0.99859849, 0.99440475, 0.98745105, 0.97779076,
         0.96549770, 0.95066529, 0.93340547, 0.91384741, 0.89213598, 0.86843014,
@@ -139,7 +137,6 @@ public sealed class SpeexResamplerCSharp {
         new(256, 32, 0.975f, 0.975f, KAISER12)
     };
 
-    // State
     private uint in_rate;
     private uint out_rate;
     private uint num_rate;
@@ -162,7 +159,6 @@ public sealed class SpeexResamplerCSharp {
     private float[] sinc_table;
     private uint sinc_table_length;
     
-    // Resampler function selector - eliminates delegate allocations
     private enum ResamplerType {
         Zero,
         DirectSingle,
@@ -307,8 +303,6 @@ public sealed class SpeexResamplerCSharp {
             int offset = (int)(samp_frac_num_val * oversample / den_rate);
             float frac = ((float)((samp_frac_num_val * oversample) % den_rate)) / den_rate;
             
-            // Compute cubic interpolation coefficients inline (no allocation)
-            // Matches libspeexdsp/resample.c:318-328 cubic_coef() function
             float c0 = -0.16667f * frac + 0.16667f * frac * frac * frac;
             float c1 = frac + 0.5f * frac * frac - 0.5f * frac * frac * frac;
             float c3 = -0.33333f * frac + 0.5f * frac * frac - 0.16667f * frac * frac * frac;
@@ -350,8 +344,6 @@ public sealed class SpeexResamplerCSharp {
             int offset = (int)(samp_frac_num_val * oversample / den_rate);
             float frac = ((float)((samp_frac_num_val * oversample) % den_rate)) / den_rate;
             
-            // Compute cubic interpolation coefficients inline (no allocation)
-            // Matches libspeexdsp/resample.c:318-328 cubic_coef() function
             float c0 = -0.16667f * frac + 0.16667f * frac * frac * frac;
             float c1 = frac + 0.5f * frac * frac - 0.5f * frac * frac * frac;
             float c3 = -0.33333f * frac + 0.5f * frac * frac - 0.16667f * frac * frac * frac;
@@ -558,16 +550,12 @@ fail:
         return RESAMPLER_ERR_ALLOC_FAILED;
     }
 
-    /// <summary>
-    /// Process native resampling - matches speex_resampler_process_native from resample.c
-    /// </summary>
     private int SpeexResamplerProcessNative(uint channel_index, ref uint in_len, Span<float> outBuf, int outOffset, ref uint out_len) {
         int N = (int)filt_len;
         int memOffset = (int)(channel_index * mem_alloc_size);
         
         started = 1;
 
-        // Call the right resampler through the function ptr
         int out_sample;
         switch (resampler_type) {
             case ResamplerType.DirectSingle:
@@ -596,7 +584,6 @@ fail:
         
         uint ilen = in_len;
         
-        // Shift memory
         for (int j = 0; j < N - 1; j++) {
             mem[memOffset + j] = mem[memOffset + (int)ilen + j];
         }
@@ -604,9 +591,6 @@ fail:
         return RESAMPLER_ERR_SUCCESS;
     }
 
-    /// <summary>
-    /// Handle magic samples - matches speex_resampler_magic from resample.c
-    /// </summary>
     private int SpeexResamplerMagic(uint channel_index, Span<float> outBuf, ref int outOffset, uint out_len) {
         uint tmp_in_len = magic_samples[channel_index];
         int memOffset = (int)(channel_index * mem_alloc_size);
@@ -617,7 +601,6 @@ fail:
         
         magic_samples[channel_index] -= tmp_in_len;
         
-        // If we couldn't process all "magic" input samples, save the rest for next time
         if (magic_samples[channel_index] != 0) {
             for (uint i = 0; i < magic_samples[channel_index]; i++) {
                 mem[memOffset + N - 1 + (int)i] = mem[memOffset + N - 1 + (int)tmp_in_len + (int)i];
@@ -628,9 +611,6 @@ fail:
         return (int)out_len_temp;
     }
 
-    /// <summary>
-    /// Process float samples for a single channel - matches speex_resampler_process_float from resample.c
-    /// </summary>
     public int ProcessFloat(uint channel_index, ReadOnlySpan<float> input, int inputOffset,
         ref uint in_len, Span<float> output, int outputOffset, ref uint out_len) {
         
@@ -658,7 +638,6 @@ fail:
                 uint ichunk = (ilen > xlen) ? xlen : ilen;
                 uint ochunk = olen;
                 
-                // Copy input to memory buffer
                 if (input.Length > 0) {
                     for (int j = 0; j < (int)ichunk; j++) {
                         int srcIdx = currentInOffset + j * istride;
@@ -691,9 +670,6 @@ fail:
         return resampler_type == ResamplerType.Zero ? RESAMPLER_ERR_ALLOC_FAILED : RESAMPLER_ERR_SUCCESS;
     }
 
-    /// <summary>
-    /// Process interleaved float samples - matches speex_resampler_process_interleaved_float from resample.c
-    /// </summary>
     public int ProcessInterleavedFloat(ReadOnlySpan<float> input, ref uint in_len,
         Span<float> output, ref uint out_len) {
         
@@ -722,13 +698,6 @@ fail:
         return resampler_type == ResamplerType.Zero ? RESAMPLER_ERR_ALLOC_FAILED : RESAMPLER_ERR_SUCCESS;
     }
 
-    /// <summary>
-    /// Convenience wrapper for processing interleaved float data.
-    /// Computes frame counts from the provided spans, calls the canonical
-    /// `ProcessInterleavedFloat(... ref ...)` implementation, and returns
-    /// the consumed/produced frame counts. This is a thin wrapper only and
-    /// does not alter resampling behavior or skip any processing steps.
-    /// </summary>
     public void ProcessInterleavedFloat(ReadOnlySpan<float> input, Span<float> output,
         out uint inputFramesConsumed, out uint outputFramesProduced) {
         
@@ -752,12 +721,12 @@ fail:
         
         ProcessInterleavedFloat(input, ref in_len, output, ref out_len);
         
-        // in_len and out_len now contain the amount consumed/produced
         inputFramesConsumed = in_len;
         outputFramesProduced = out_len;
     }
 
     public void SetRate(uint in_rate_new, uint out_rate_new) {
+        uint old_den = den_rate;
         in_rate = in_rate_new;
         out_rate = out_rate_new;
         num_rate = in_rate_new;
@@ -772,6 +741,17 @@ fail:
         }
         num_rate /= a;
         den_rate /= a;
+
+        if (old_den > 0) {
+            for (uint i = 0; i < nb_channels; i++) {
+                if (MultiplyFrac(out samp_frac_num[i], samp_frac_num[i], den_rate, old_den) != RESAMPLER_ERR_SUCCESS) {
+                    return;
+                }
+                if (samp_frac_num[i] >= den_rate) {
+                    samp_frac_num[i] = den_rate - 1;
+                }
+            }
+        }
 
         UpdateFilter();
     }
