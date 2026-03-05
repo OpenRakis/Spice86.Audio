@@ -89,14 +89,22 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
         }
 
         // Reference: COREAUDIO_OpenDevice line 1140-1143
+        // Reference: SDL_audio.c open_audio_device
+        // If we don't allow negotiation, keep the desired buffer size
+        int finalBufferFrames = bufferFrames;
+        if (!desiredSpec.AllowNegotiate) {
+            finalBufferFrames = desiredSpec.BufferFrames;
+        }
+
         obtainedSpec = new AudioSpec {
             SampleRate = freq,
             Channels = channels,
-            BufferFrames = bufferFrames,
+            BufferFrames = finalBufferFrames,
             Callback = desiredSpec.Callback,
-            PostmixCallback = desiredSpec.PostmixCallback
+            PostmixCallback = desiredSpec.PostmixCallback,
+            AllowNegotiate = desiredSpec.AllowNegotiate
         };
-        sampleFrames = bufferFrames;
+        sampleFrames = finalBufferFrames;
 
         return true;
     }
@@ -457,3 +465,4 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
         }
     }
 }
+

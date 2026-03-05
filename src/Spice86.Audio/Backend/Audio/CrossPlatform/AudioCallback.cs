@@ -50,6 +50,12 @@ public sealed class AudioSpec {
     public AudioPostmixCallback? PostmixCallback { get; init; }
 
     /// <summary>
+    /// Whether the audio device is allowed to negotiate buffer size with the hardware.
+    /// Reference: SDL_AUDIO_ALLOW_SAMPLES_CHANGE from SDL_audio.h
+    /// </summary>
+    public bool AllowNegotiate { get; init; } = true;
+
+    /// <summary>
     /// Gets the buffer size in samples (frames * channels).
     /// </summary>
     public int BufferSamples => BufferFrames * Channels;
@@ -79,3 +85,4 @@ public enum AudioDeviceState {
     /// </summary>
     Error
 }
+

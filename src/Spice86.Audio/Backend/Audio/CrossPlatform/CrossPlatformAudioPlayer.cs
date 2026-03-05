@@ -22,7 +22,8 @@ public sealed class CrossPlatformAudioPlayer : AudioPlayer {
     /// <param name="backend">Platform-specific audio backend.</param>
     /// <param name="bufferFrames">Buffer size in frames for the audio device.</param>
     /// <param name="prebufferMs">Prebuffer duration in milliseconds.</param>
-    public CrossPlatformAudioPlayer(AudioFormat format, IAudioBackend backend, int bufferFrames, int prebufferMs)
+    /// <param name="allowNegotiate">Whether the audio device is allowed to negotiate buffer size with hardware.</param>
+    public CrossPlatformAudioPlayer(AudioFormat format, IAudioBackend backend, int bufferFrames, int prebufferMs, bool allowNegotiate)
         : base(format) {
         _backend = backend ?? throw new ArgumentNullException(nameof(backend));
 
@@ -30,7 +31,8 @@ public sealed class CrossPlatformAudioPlayer : AudioPlayer {
             SampleRate = format.SampleRate,
             Channels = format.Channels,
             BufferFrames = bufferFrames,
-            Callback = AudioCallback
+            Callback = AudioCallback,
+            AllowNegotiate = allowNegotiate
         };
 
         if (!_backend.Open(spec)) {
@@ -118,3 +120,4 @@ public sealed class CrossPlatformAudioPlayer : AudioPlayer {
         base.Dispose(disposing);
     }
 }
+

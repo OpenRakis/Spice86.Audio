@@ -26,10 +26,11 @@ public class AudioPlayerFactory {
     /// <param name="sampleRate">The sample rate of the audio player, in Hz.</param>
     /// <param name="framesPerBuffer">The number of frames per buffer, or 0 for the default value.</param>
     /// <param name="prebufferMs">Prebuffer duration in milliseconds.</param>
+    /// <param name="allowNegotiate">Whether to allow blocksize negotiation by the OS driver.</param>
     /// <returns>An instance of an <see cref="AudioPlayer"/>.</returns>
-    public AudioPlayer CreatePlayer(int sampleRate, int framesPerBuffer, int prebufferMs) {
+    public AudioPlayer CreatePlayer(int sampleRate, int framesPerBuffer, int prebufferMs, bool allowNegotiate) {
         if (_audioEngine == AudioEngine.CrossPlatform) {
-            AudioPlayer? player = TryCreateCrossPlatformPlayer(sampleRate, framesPerBuffer, prebufferMs);
+            AudioPlayer? player = TryCreateCrossPlatformPlayer(sampleRate, framesPerBuffer, prebufferMs, allowNegotiate);
             if (player != null) {
                 return player;
             }
@@ -39,7 +40,7 @@ public class AudioPlayerFactory {
             SampleFormat: SampleFormat.IeeeFloat32));
     }
 
-    private static CrossPlatformAudioPlayer? TryCreateCrossPlatformPlayer(int sampleRate, int framesPerBuffer, int prebufferMs) {
+    private static CrossPlatformAudioPlayer? TryCreateCrossPlatformPlayer(int sampleRate, int framesPerBuffer, int prebufferMs, bool allowNegotiate) {
         try {
             IAudioBackend? backend = AudioBackendFactory.Create();
             if (backend == null) {
@@ -50,7 +51,7 @@ public class AudioPlayerFactory {
             AudioFormat format = new AudioFormat(SampleRate: sampleRate, Channels: 2,
                 SampleFormat: SampleFormat.IeeeFloat32);
 
-            return new CrossPlatformAudioPlayer(format, backend, bufferFrames, prebufferMs);
+            return new CrossPlatformAudioPlayer(format, backend, bufferFrames, prebufferMs, allowNegotiate);
         } catch (InvalidOperationException) {
             return null;
         }

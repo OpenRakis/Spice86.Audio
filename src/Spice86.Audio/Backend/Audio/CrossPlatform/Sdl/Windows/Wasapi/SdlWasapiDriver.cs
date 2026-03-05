@@ -150,6 +150,14 @@ internal sealed partial class SdlWasapiDriver : ISdlAudioDriver {
                 calculatedFrames = (int)bufferFrameCount;
             }
 
+            // Reference: SDL_audio.c open_audio_device
+            // If the device suggests a different sample size and we don't allow negotiation,
+            // keep the desired buffer size instead of adopting the device's calculated size.
+            int obtainedBufferFrames = calculatedFrames;
+            if (!desiredSpec.AllowNegotiate && calculatedFrames != desiredSpec.BufferFrames) {
+                obtainedBufferFrames = desiredSpec.BufferFrames;
+            }
+
             Guid iidRenderClient = SdlWasapiGuids.IidIaudioRenderClient;
             hr = _audioClient.GetService(ref iidRenderClient, out IntPtr renderClientPtr);
             if (SdlWasapiResult.Failed(hr) || renderClientPtr == IntPtr.Zero) {
@@ -162,7 +170,7 @@ internal sealed partial class SdlWasapiDriver : ISdlAudioDriver {
                 typeof(IAudioRenderClient));
             Marshal.Release(renderClientPtr);
             _renderClient = renderClient;
-            _sampleFrames = calculatedFrames;
+            _sampleFrames = obtainedBufferFrames;
             _bufferFrameCount = (int)bufferFrameCount;
             // _channels was already set above from the device's native mix format
             _bytesPerFrame = _channels * sizeof(float);
@@ -178,12 +186,13 @@ internal sealed partial class SdlWasapiDriver : ISdlAudioDriver {
             obtainedSpec = new AudioSpec {
                 SampleRate = desiredSpec.SampleRate,
                 Channels = _channels,
-                BufferFrames = calculatedFrames,
+                BufferFrames = obtainedBufferFrames,
                 Callback = desiredSpec.Callback,
-                PostmixCallback = desiredSpec.PostmixCallback
+                PostmixCallback = desiredSpec.PostmixCallback,
+                AllowNegotiate = desiredSpec.AllowNegotiate
             };
 
-            sampleFrames = calculatedFrames;
+            sampleFrames = obtainedBufferFrames;
 
             return true;
         } catch (COMException ex) {
@@ -371,3 +380,4 @@ internal sealed partial class SdlWasapiDriver : ISdlAudioDriver {
         public static partial IntPtr GetProcAddress(IntPtr hModule, string lpProcName);
     }
 }
+

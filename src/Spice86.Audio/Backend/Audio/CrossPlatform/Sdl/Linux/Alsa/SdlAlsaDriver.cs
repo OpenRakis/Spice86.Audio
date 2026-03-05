@@ -165,7 +165,15 @@ internal sealed class SdlAlsaDriver : ISdlAudioDriver {
 
             // Reference: ALSA_OpenDevice line 749-756
             // Calculate final parameters
-            _sampleFrames = (int)persize;
+            // Reference: SDL_audio.c open_audio_device
+            // If the device suggests a different sample size and we don't allow negotiation,
+            // keep the desired buffer size instead of adopting the device's negotiated size.
+            ulong finalBufferFrames = persize;
+            if (!desiredSpec.AllowNegotiate && persize != (ulong)desiredSpec.BufferFrames) {
+                finalBufferFrames = (ulong)desiredSpec.BufferFrames;
+            }
+
+            _sampleFrames = (int)finalBufferFrames;
             _channels = (int)channels;
             _frameSize = _channels * sizeof(float); // float LE = 4 bytes per sample
             _mixBufferBytes = _sampleFrames * _frameSize;
@@ -186,7 +194,8 @@ internal sealed class SdlAlsaDriver : ISdlAudioDriver {
                 Channels = (int)channels,
                 BufferFrames = _sampleFrames,
                 Callback = desiredSpec.Callback,
-                PostmixCallback = desiredSpec.PostmixCallback
+                PostmixCallback = desiredSpec.PostmixCallback,
+                AllowNegotiate = desiredSpec.AllowNegotiate
             };
             sampleFrames = _sampleFrames;
 
@@ -410,3 +419,4 @@ internal sealed class SdlAlsaDriver : ISdlAudioDriver {
         }
     }
 }
+
