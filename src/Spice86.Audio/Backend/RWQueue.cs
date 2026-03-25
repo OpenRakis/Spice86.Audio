@@ -103,7 +103,7 @@ public sealed class RWQueue<T> where T : struct
             }
             _buffer = newBuffer;
             _head = 0;
-            _tail = itemsToCopy;
+            _tail = itemsToCopy % newCapacity;
             _count = itemsToCopy;
             _capacity = newCapacity;
         }
