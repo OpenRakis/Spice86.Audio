@@ -1,6 +1,6 @@
 # Introduction
 
-Integrates ports from DOSBox Staging and SDL2, Speex, IIR Filters, and reasmplers and native interops, so Spice86.Core can focus on emulated devices
+Integrates ports from DOSBox Staging and SDL2, Speex, IIR Filters, and reasmplers and native interops, so Spice86.Core can focus on emulated devices (Sound Blaster, OPL2, OPL3, Adlib Gold, ...)
 
 ## License and Credits
 
