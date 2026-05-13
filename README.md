@@ -4,7 +4,7 @@ A full cross-platform audio library for desktop OSes (Windows, mac, Linux), enti
 
 # Technicals
 
-Integrates ports of C and C++ from DOSBox Staging and SDL2, Speex, IIR Filters, and reasmplers and native interops, so Spice86.Core can focus on emulated devices (Sound Blaster, OPL2, OPL3, Adlib Gold, ...)
+Integrates ports of C and C++ from DOSBox Staging and SDL2, Speex, IIR Filters, native interops, and more, so Spice86.Core can focus on emulated audio devices (Sound Blaster, OPL2, OPL3, Adlib Gold, ...)
 
 ## License and Credits
 
