@@ -1,8 +1,11 @@
 name: Run tests
 
-# Trigger the workflow on PRs
+# Trigger the workflow on PRs and on pushes to main (so the CI badge stays green)
 on:
-    pull_request
+  pull_request:
+  push:
+    branches:
+      - main
 
 jobs:
   build:
