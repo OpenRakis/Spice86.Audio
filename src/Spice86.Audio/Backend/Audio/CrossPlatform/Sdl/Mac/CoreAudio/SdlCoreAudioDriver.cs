@@ -23,23 +23,16 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver
     private string? _threadError;
     private SdlAudioDevice? _device;
     private readonly object _mixerLock = new();
-
-    // Must prevent GC of the delegate while AudioQueue is using it
     private CoreAudioNativeMethods.AudioQueueOutputCallback? _outputCallbackDelegate;
     private GCHandle _callbackHandle;
     private IntPtr _defaultRunLoopMode;
+    private uint _deviceId;
 
     public bool ProvidesOwnCallbackThread => true;
 
     /// <summary>
     /// Opens the CoreAudio AudioQueue device.
     /// Reference: COREAUDIO_OpenDevice (SDL_coreaudio.m line 1062)
-    /// 
-    /// Flow:
-    /// 1. Setup AudioStreamBasicDescription for float PCM
-    /// 2. Create audioqueue_thread which calls prepare_audioqueue
-    /// 3. Wait for ready semaphore
-    /// 4. Return success/failure
     /// </summary>
     public bool OpenDevice(SdlAudioDevice device, AudioSpec desiredSpec, out AudioSpec obtainedSpec, out int sampleFrames, out string? error)
     {
@@ -49,33 +42,27 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver
         _device = device;
         _shutdown = false;
         _threadError = null;
-
-        // Reference: COREAUDIO_OpenDevice line 1098-1126
-        // Setup AudioStreamBasicDescription for float LE format
-        // SDL always uses AUDIO_F32LSB for the device spec on macOS
+        _deviceId = 0;
 
         int channels = desiredSpec.Channels;
         int freq = desiredSpec.SampleRate;
         int bufferFrames = desiredSpec.BufferFrames;
 
-        // Calculate buffer size: frames * channels * sizeof(float)
-        // Reference: SDL_CalculateAudioSpec equivalent
-        _mixBufferSize = bufferFrames * channels * sizeof(float);
-        _mixBufferOffset = _mixBufferSize; // Start fully consumed (triggers first callback fill)
+        if (!PrepareDevice(out error))
+        {
+            return false;
+        }
 
-        // Allocate the mix buffer
-        // Reference: prepare_audioqueue line ~949-953
+        _mixBufferSize = bufferFrames * channels * sizeof(float);
+        _mixBufferOffset = _mixBufferSize;
+
         _mixBuffer = Marshal.AllocHGlobal(_mixBufferSize);
         unsafe
         {
             NativeMemory.Clear(_mixBuffer.ToPointer(), (nuint)_mixBufferSize);
         }
 
-        // Get kCFRunLoopDefaultMode
         _defaultRunLoopMode = CoreAudioNativeMethods.GetDefaultRunLoopMode();
-
-        // Reference: COREAUDIO_OpenDevice line 1127-1134
-        // "This has to init in a new thread so it can get its own CFRunLoop."
         _readySemaphore.Reset();
 
         _audioQueueThread = new Thread(() => AudioQueueThreadProc(freq, channels, bufferFrames))
@@ -85,8 +72,6 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver
         };
         _audioQueueThread.Start();
 
-        // Reference: COREAUDIO_OpenDevice line 1137-1138
-        // SDL_SemWait(this->hidden->ready_semaphore)
         _readySemaphore.Wait();
 
         if (_threadError != null)
@@ -95,9 +80,6 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver
             return false;
         }
 
-        // Reference: COREAUDIO_OpenDevice line 1140-1143
-        // Reference: SDL_audio.c open_audio_device
-        // If we don't allow negotiation, keep the desired buffer size
         int finalBufferFrames = bufferFrames;
         if (!desiredSpec.AllowNegotiate)
         {
@@ -116,6 +98,125 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver
         sampleFrames = finalBufferFrames;
 
         return true;
+    }
+
+    private bool PrepareDevice(out string? error)
+    {
+        error = null;
+
+        CoreAudioNativeMethods.AudioObjectPropertyAddress address =
+            CoreAudioNativeMethods.CreatePropertyAddress(
+                CoreAudioConstants.AudioHardwarePropertyDefaultOutputDevice,
+                CoreAudioConstants.AudioObjectPropertyScopeGlobal);
+
+        uint size = sizeof(uint);
+        int result = CoreAudioNativeMethods.AudioObjectGetPropertyData(
+            CoreAudioConstants.AudioObjectSystemObject,
+            ref address,
+            0,
+            IntPtr.Zero,
+            ref size,
+            out uint deviceId);
+
+        if (result != CoreAudioConstants.NoErr || deviceId == 0)
+        {
+            error = $"CoreAudio: AudioObjectGetPropertyData(kAudioHardwarePropertyDefaultOutputDevice) failed with error {result}";
+            return false;
+        }
+
+        address.Selector = CoreAudioConstants.AudioDevicePropertyDeviceIsAlive;
+        address.Scope = CoreAudioConstants.AudioDevicePropertyScopeOutput;
+        size = sizeof(uint);
+
+        result = CoreAudioNativeMethods.AudioObjectGetPropertyData(
+            deviceId,
+            ref address,
+            0,
+            IntPtr.Zero,
+            ref size,
+            out uint alive);
+
+        if (result != CoreAudioConstants.NoErr)
+        {
+            error = $"CoreAudio: AudioObjectGetPropertyData(kAudioDevicePropertyDeviceIsAlive) failed with error {result}";
+            return false;
+        }
+
+        if (alive == 0)
+        {
+            error = "CoreAudio: requested default output device exists, but isn't alive.";
+            return false;
+        }
+
+        address.Selector = CoreAudioConstants.AudioDevicePropertyHogMode;
+        size = sizeof(int);
+
+        result = CoreAudioNativeMethods.AudioObjectGetPropertyData(
+            deviceId,
+            ref address,
+            0,
+            IntPtr.Zero,
+            ref size,
+            out int hogModePid);
+
+        if (result == CoreAudioConstants.NoErr && hogModePid != -1)
+        {
+            error = "CoreAudio: default output device is being hogged.";
+            return false;
+        }
+
+        _deviceId = deviceId;
+        return true;
+    }
+
+    private bool AssignDeviceToAudioQueue()
+    {
+        if (_deviceId == 0)
+        {
+            _threadError = "CoreAudio: no output device was selected for AudioQueue binding.";
+            return false;
+        }
+
+        CoreAudioNativeMethods.AudioObjectPropertyAddress address =
+            CoreAudioNativeMethods.CreatePropertyAddress(
+                CoreAudioConstants.AudioDevicePropertyDeviceUid,
+                CoreAudioConstants.AudioDevicePropertyScopeOutput);
+
+        uint size = (uint)IntPtr.Size;
+        int result = CoreAudioNativeMethods.AudioObjectGetPropertyData(
+            _deviceId,
+            ref address,
+            0,
+            IntPtr.Zero,
+            ref size,
+            out IntPtr deviceUid);
+
+        if (result != CoreAudioConstants.NoErr || deviceUid == IntPtr.Zero)
+        {
+            _threadError = $"CoreAudio: AudioObjectGetPropertyData(kAudioDevicePropertyDeviceUID) failed with error {result}";
+            return false;
+        }
+
+        try
+        {
+            result = CoreAudioNativeMethods.AudioQueueSetProperty(
+                _audioQueue,
+                CoreAudioConstants.AudioQueuePropertyCurrentDevice,
+                ref deviceUid,
+                (uint)IntPtr.Size);
+
+            if (result != CoreAudioConstants.NoErr)
+            {
+                _threadError = $"CoreAudio: AudioQueueSetProperty(kAudioQueueProperty_CurrentDevice) failed with error {result}";
+                return false;
+            }
+
+            return true;
+        }
+        finally
+        {
+            CoreAudioNativeMethods.CFRelease(deviceUid);
+        }
     }
 
     /// <summary>
@@ -167,6 +268,7 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver
             _callbackHandle.Free();
         }
 
+        _deviceId = 0;
         _audioBuffers = [];
     }
 
@@ -313,6 +415,13 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver
         if (result != CoreAudioConstants.NoErr)
         {
             _threadError = $"CoreAudio: AudioQueueNewOutput failed with error {result}";
+            return false;
+        }
+
+        if (!AssignDeviceToAudioQueue())
+        {
+            CoreAudioNativeMethods.AudioQueueDispose(_audioQueue, 1);
+            _audioQueue = IntPtr.Zero;
             return false;
         }
 
