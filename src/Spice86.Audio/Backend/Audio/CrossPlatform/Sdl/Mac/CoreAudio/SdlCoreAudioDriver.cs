@@ -10,7 +10,8 @@ using System.Threading;
 /// This is an exact port of SDL_coreaudio.m (SDL2) to C#.
 /// </summary>
 [SupportedOSPlatform("osx")]
-internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
+internal sealed class SdlCoreAudioDriver : ISdlAudioDriver
+{
     private IntPtr _audioQueue;
     private IntPtr[] _audioBuffers = [];
     private IntPtr _mixBuffer;
@@ -28,6 +29,8 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
     private GCHandle _callbackHandle;
     private IntPtr _defaultRunLoopMode;
 
+    public bool ProvidesOwnCallbackThread => true;
+
     /// <summary>
     /// Opens the CoreAudio AudioQueue device.
     /// Reference: COREAUDIO_OpenDevice (SDL_coreaudio.m line 1062)
@@ -38,7 +41,8 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
     /// 3. Wait for ready semaphore
     /// 4. Return success/failure
     /// </summary>
-    public bool OpenDevice(SdlAudioDevice device, AudioSpec desiredSpec, out AudioSpec obtainedSpec, out int sampleFrames, out string? error) {
+    public bool OpenDevice(SdlAudioDevice device, AudioSpec desiredSpec, out AudioSpec obtainedSpec, out int sampleFrames, out string? error)
+    {
         obtainedSpec = desiredSpec;
         sampleFrames = 0;
         error = null;
@@ -62,7 +66,8 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
         // Allocate the mix buffer
         // Reference: prepare_audioqueue line ~949-953
         _mixBuffer = Marshal.AllocHGlobal(_mixBufferSize);
-        unsafe {
+        unsafe
+        {
             NativeMemory.Clear(_mixBuffer.ToPointer(), (nuint)_mixBufferSize);
         }
 
@@ -73,7 +78,8 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
         // "This has to init in a new thread so it can get its own CFRunLoop."
         _readySemaphore.Reset();
 
-        _audioQueueThread = new Thread(() => AudioQueueThreadProc(freq, channels, bufferFrames)) {
+        _audioQueueThread = new Thread(() => AudioQueueThreadProc(freq, channels, bufferFrames))
+        {
             Name = "CoreAudio-AudioQueue",
             IsBackground = true
         };
@@ -83,7 +89,8 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
         // SDL_SemWait(this->hidden->ready_semaphore)
         _readySemaphore.Wait();
 
-        if (_threadError != null) {
+        if (_threadError != null)
+        {
             error = _threadError;
             return false;
         }
@@ -92,11 +99,13 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
         // Reference: SDL_audio.c open_audio_device
         // If we don't allow negotiation, keep the desired buffer size
         int finalBufferFrames = bufferFrames;
-        if (!desiredSpec.AllowNegotiate) {
+        if (!desiredSpec.AllowNegotiate)
+        {
             finalBufferFrames = desiredSpec.BufferFrames;
         }
 
-        obtainedSpec = new AudioSpec {
+        obtainedSpec = new AudioSpec
+        {
             SampleRate = freq,
             Channels = channels,
             BufferFrames = finalBufferFrames,
@@ -119,7 +128,8 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
     /// 3. Wait for audioqueue_thread to finish
     /// 4. Free mix buffer
     /// </summary>
-    public void CloseDevice(SdlAudioDevice device) {
+    public void CloseDevice(SdlAudioDevice device)
+    {
         // Reference: COREAUDIO_CloseDevice line 679
         // "if callback fires again, feed silence; don't call into the app."
         // The shutdown flag is already set by SdlAudioDevice.Close()
@@ -127,7 +137,8 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
         // Reference: COREAUDIO_CloseDevice line 681-683
         // "dispose of the audio queue before waiting on the thread, 
         //  or it might stall for a long time!"
-        if (_audioQueue != IntPtr.Zero) {
+        if (_audioQueue != IntPtr.Zero)
+        {
             CoreAudioNativeMethods.AudioQueueFlush(_audioQueue);
             CoreAudioNativeMethods.AudioQueueStop(_audioQueue, 0);
             CoreAudioNativeMethods.AudioQueueDispose(_audioQueue, 0);
@@ -137,19 +148,22 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
         // Reference: COREAUDIO_CloseDevice line 685-687
         // "SDL_WaitThread(this->hidden->thread, NULL)"
         _shutdown = true;
-        if (_audioQueueThread != null && _audioQueueThread.IsAlive) {
+        if (_audioQueueThread != null && _audioQueueThread.IsAlive)
+        {
             _audioQueueThread.Join(TimeSpan.FromSeconds(5));
         }
         _audioQueueThread = null;
 
         // Free the mix buffer
-        if (_mixBuffer != IntPtr.Zero) {
+        if (_mixBuffer != IntPtr.Zero)
+        {
             Marshal.FreeHGlobal(_mixBuffer);
             _mixBuffer = IntPtr.Zero;
         }
 
         // Free callback handle
-        if (_callbackHandle.IsAllocated) {
+        if (_callbackHandle.IsAllocated)
+        {
             _callbackHandle.Free();
         }
 
@@ -163,7 +177,8 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
     /// The SdlAudioDevice thread will just idle, and CloseDevice's
     /// shutdown flag will break it out.
     /// </summary>
-    public void WaitDevice(SdlAudioDevice device) {
+    public void WaitDevice(SdlAudioDevice device)
+    {
         // CoreAudio uses ProvidesOwnCallbackThread.
         // The SdlAudioDevice thread is idle; sleep to avoid busy-waiting.
         Thread.Sleep(100);
@@ -173,7 +188,8 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
     /// GetDeviceBuf for CoreAudio returns null.
     /// CoreAudio fills buffers directly in its outputCallback.
     /// </summary>
-    public IntPtr GetDeviceBuf(SdlAudioDevice device) {
+    public IntPtr GetDeviceBuf(SdlAudioDevice device)
+    {
         return IntPtr.Zero;
     }
 
@@ -181,7 +197,8 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
     /// PlayDevice for CoreAudio is a no-op.
     /// CoreAudio enqueues buffers directly in its outputCallback.
     /// </summary>
-    public void PlayDevice(SdlAudioDevice device) {
+    public void PlayDevice(SdlAudioDevice device)
+    {
     }
 
     /// <summary>
@@ -189,7 +206,8 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
     /// Reference: audioqueue_thread line 1020
     /// SDL_SetThreadPriority(SDL_THREAD_PRIORITY_HIGH)
     /// </summary>
-    public void ThreadInit(SdlAudioDevice device) {
+    public void ThreadInit(SdlAudioDevice device)
+    {
         // CoreAudio manages its own thread. The SdlAudioDevice thread
         // is essentially idle for CoreAudio.
     }
@@ -197,7 +215,8 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
     /// <summary>
     /// ThreadDeinit for CoreAudio is a no-op.
     /// </summary>
-    public void ThreadDeinit(SdlAudioDevice device) {
+    public void ThreadDeinit(SdlAudioDevice device)
+    {
     }
 
     /// <summary>
@@ -210,10 +229,12 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
     /// 3. Loop CFRunLoopRunInMode until shutdown
     /// 4. On exit, drain remaining playback
     /// </summary>
-    private void AudioQueueThreadProc(int sampleRate, int channels, int bufferFrames) {
+    private void AudioQueueThreadProc(int sampleRate, int channels, int bufferFrames)
+    {
         // Reference: audioqueue_thread line 1010-1013
         // prepare_audioqueue creates the AudioQueue bound to this thread's CFRunLoop
-        if (!PrepareAudioQueue(sampleRate, channels, bufferFrames)) {
+        if (!PrepareAudioQueue(sampleRate, channels, bufferFrames))
+        {
             _threadError = _threadError ?? "Failed to prepare AudioQueue";
             _readySemaphore.Set();
             return;
@@ -229,7 +250,8 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
 
         // Reference: audioqueue_thread line 1025-1059
         // Main run loop
-        while (!_shutdown && (_device == null || !_device.ShutdownRequested)) {
+        while (!_shutdown && (_device == null || !_device.ShutdownRequested))
+        {
             // Reference: audioqueue_thread line 1026
             // CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.10, 1)
             CoreAudioNativeMethods.CFRunLoopRunInMode(_defaultRunLoopMode, 0.10, 1);
@@ -237,7 +259,8 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
 
         // Reference: audioqueue_thread line 1061-1064
         // "if (!this->iscapture)" - drain off any pending playback
-        if (_device != null) {
+        if (_device != null)
+        {
             double secs = (((double)_mixBufferSize / sizeof(float)) / channels) / sampleRate * 2.0;
             CoreAudioNativeMethods.CFRunLoopRunInMode(_defaultRunLoopMode, secs, 0);
         }
@@ -253,10 +276,12 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
     /// 3. Allocate and enqueue audio buffers
     /// 4. Start the AudioQueue
     /// </summary>
-    private bool PrepareAudioQueue(int sampleRate, int channels, int bufferFrames) {
+    private bool PrepareAudioQueue(int sampleRate, int channels, int bufferFrames)
+    {
         // Reference: prepare_audioqueue line ~896-900
         // Setup AudioStreamBasicDescription
-        CoreAudioNativeMethods.AudioStreamBasicDescription strdesc = new() {
+        CoreAudioNativeMethods.AudioStreamBasicDescription strdesc = new()
+        {
             SampleRate = sampleRate,
             FormatId = CoreAudioConstants.AudioFormatLinearPcm,
             // Float LE + Packed (matching SDL's AUDIO_F32LSB path)
@@ -285,7 +310,8 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
             0,
             out _audioQueue);
 
-        if (result != CoreAudioConstants.NoErr) {
+        if (result != CoreAudioConstants.NoErr)
+        {
             _threadError = $"CoreAudio: AudioQueueNewOutput failed with error {result}";
             return false;
         }
@@ -293,7 +319,8 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
         // Reference: prepare_audioqueue line ~920-944
         // Set channel layout
         CoreAudioNativeMethods.AudioChannelLayout layout = new();
-        switch (channels) {
+        switch (channels)
+        {
             case 1:
                 layout.ChannelLayoutTag = CoreAudioConstants.AudioChannelLayoutTagMono;
                 break;
@@ -319,10 +346,12 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
                 return false;
         }
 
-        if (layout.ChannelLayoutTag != 0) {
+        if (layout.ChannelLayoutTag != 0)
+        {
             int layoutSize = Marshal.SizeOf<CoreAudioNativeMethods.AudioChannelLayout>();
             IntPtr layoutPtr = Marshal.AllocHGlobal(layoutSize);
-            try {
+            try
+            {
                 Marshal.StructureToPtr(layout, layoutPtr, false);
                 result = CoreAudioNativeMethods.AudioQueueSetProperty(
                     _audioQueue,
@@ -330,7 +359,9 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
                     layoutPtr,
                     (uint)layoutSize);
                 // Ignore errors - not critical (SDL does CHECK_RESULT but continues)
-            } finally {
+            }
+            finally
+            {
                 Marshal.FreeHGlobal(layoutPtr);
             }
         }
@@ -339,23 +370,19 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
         // Calculate number of audio buffers
         // "Make sure we can feed the device a minimum amount of time"
         uint bufferSizeBytes = (uint)(bufferFrames * channels * sizeof(float));
-        double msecs = ((double)bufferFrames / sampleRate) * 1000.0;
-        int numAudioBuffers = 2;
-
-        if (msecs < CoreAudioConstants.MinimumAudioBufferTimeMs) {
-            // Use more buffers if we have a VERY small sample set
-            numAudioBuffers = (int)(Math.Ceiling(CoreAudioConstants.MinimumAudioBufferTimeMs / msecs) * 2);
-        }
+        int numAudioBuffers = CoreAudioBufferPolicy.ComputeAudioBufferCount(sampleRate, bufferFrames);
 
         _audioBuffers = new IntPtr[numAudioBuffers];
 
-        for (int i = 0; i < numAudioBuffers; i++) {
+        for (int i = 0; i < numAudioBuffers; i++)
+        {
             result = CoreAudioNativeMethods.AudioQueueAllocateBuffer(
                 _audioQueue,
                 bufferSizeBytes,
                 out _audioBuffers[i]);
 
-            if (result != CoreAudioConstants.NoErr) {
+            if (result != CoreAudioConstants.NoErr)
+            {
                 _threadError = $"CoreAudio: AudioQueueAllocateBuffer failed with error {result}";
                 CoreAudioNativeMethods.AudioQueueDispose(_audioQueue, 1);
                 _audioQueue = IntPtr.Zero;
@@ -364,7 +391,8 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
 
             // Fill with silence and set size
             // Reference: prepare_audioqueue line ~967
-            unsafe {
+            unsafe
+            {
                 CoreAudioNativeMethods.AudioQueueBuffer* bufPtr =
                     (CoreAudioNativeMethods.AudioQueueBuffer*)_audioBuffers[i];
                 NativeMemory.Clear(bufPtr->AudioData.ToPointer(), bufPtr->AudioDataBytesCapacity);
@@ -375,7 +403,8 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
             result = CoreAudioNativeMethods.AudioQueueEnqueueBuffer(
                 _audioQueue, _audioBuffers[i], 0, IntPtr.Zero);
 
-            if (result != CoreAudioConstants.NoErr) {
+            if (result != CoreAudioConstants.NoErr)
+            {
                 _threadError = $"CoreAudio: AudioQueueEnqueueBuffer failed with error {result}";
                 CoreAudioNativeMethods.AudioQueueDispose(_audioQueue, 1);
                 _audioQueue = IntPtr.Zero;
@@ -386,7 +415,8 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
         // Reference: prepare_audioqueue line ~972
         // Start the AudioQueue
         result = CoreAudioNativeMethods.AudioQueueStart(_audioQueue, IntPtr.Zero);
-        if (result != CoreAudioConstants.NoErr) {
+        if (result != CoreAudioConstants.NoErr)
+        {
             _threadError = $"CoreAudio: AudioQueueStart failed with error {result}";
             CoreAudioNativeMethods.AudioQueueDispose(_audioQueue, 1);
             _audioQueue = IntPtr.Zero;
@@ -411,19 +441,24 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
     /// 3. Enqueue the buffer back
     /// 4. Unlock mixer_lock
     /// </summary>
-    private void OutputCallback(IntPtr inUserData, IntPtr inAudioQueue, IntPtr inBuffer) {
+    private void OutputCallback(IntPtr inUserData, IntPtr inAudioQueue, IntPtr inBuffer)
+    {
         // Reference: outputCallback line 463-466
         // Check shutdown before and after lock
-        if (_device == null || _device.ShutdownRequested) {
+        if (_device == null || _device.ShutdownRequested)
+        {
             return;
         }
 
-        lock (_mixerLock) {
-            if (_device.ShutdownRequested) {
+        lock (_mixerLock)
+        {
+            if (_device.ShutdownRequested)
+            {
                 return;
             }
 
-            unsafe {
+            unsafe
+            {
                 CoreAudioNativeMethods.AudioQueueBuffer* bufPtr =
                     (CoreAudioNativeMethods.AudioQueueBuffer*)inBuffer;
 
@@ -431,8 +466,10 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
                 byte* ptr = (byte*)bufPtr->AudioData;
 
                 // Reference: outputCallback line 501-518 (non-stream path)
-                while (remaining > 0) {
-                    if (_mixBufferOffset >= _mixBufferSize) {
+                while (remaining > 0)
+                {
+                    if (_mixBufferOffset >= _mixBufferSize)
+                    {
                         // Generate the data via the user callback
                         // Reference: outputCallback line 504-505
                         _device.FillAudioBuffer(_mixBuffer, _mixBufferSize);
@@ -440,7 +477,8 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
                     }
 
                     uint len = (uint)(_mixBufferSize - _mixBufferOffset);
-                    if (len > remaining) {
+                    if (len > remaining)
+                    {
                         len = remaining;
                     }
 
@@ -458,9 +496,9 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver {
 
                 // Reference: outputCallback line 487-489
                 // Enqueue the buffer back and set its size
+                bufPtr->AudioDataByteSize = bufPtr->AudioDataBytesCapacity;
                 CoreAudioNativeMethods.AudioQueueEnqueueBuffer(
                     inAudioQueue, inBuffer, 0, IntPtr.Zero);
-                bufPtr->AudioDataByteSize = bufPtr->AudioDataBytesCapacity;
             }
         }
     }

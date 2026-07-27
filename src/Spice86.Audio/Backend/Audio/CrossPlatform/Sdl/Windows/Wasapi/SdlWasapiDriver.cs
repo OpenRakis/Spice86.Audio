@@ -8,7 +8,8 @@ using System.Threading;
 using Spice86.Audio.Backend.Audio.CrossPlatform.Sdl;
 
 [SupportedOSPlatform("windows")]
-internal sealed partial class SdlWasapiDriver : ISdlAudioDriver {
+internal sealed partial class SdlWasapiDriver : ISdlAudioDriver
+{
     private const uint ClsctxAll = 0x17;
     private const int WaitTimeoutMs = 200;
     private const uint WaitObject0 = 0;
@@ -27,20 +28,26 @@ internal sealed partial class SdlWasapiDriver : ISdlAudioDriver {
     private IntPtr _avrtHandle;
     private IntPtr _taskHandle;
 
-    public bool OpenDevice(SdlAudioDevice device, AudioSpec desiredSpec, out AudioSpec obtainedSpec, out int sampleFrames, out string? error) {
+    public bool ProvidesOwnCallbackThread => false;
+
+    public bool OpenDevice(SdlAudioDevice device, AudioSpec desiredSpec, out AudioSpec obtainedSpec, out int sampleFrames, out string? error)
+    {
         obtainedSpec = desiredSpec;
         sampleFrames = 0;
         error = null;
 
-        try {
+        try
+        {
             Type? enumeratorType = Type.GetTypeFromCLSID(SdlWasapiGuids.ClsidMmDeviceEnumerator);
-            if (enumeratorType == null) {
+            if (enumeratorType == null)
+            {
                 error = "Failed to get MMDeviceEnumerator type";
                 return false;
             }
 
             object? enumeratorObj = Activator.CreateInstance(enumeratorType);
-            if (enumeratorObj is not IMMDeviceEnumerator enumerator) {
+            if (enumeratorObj is not IMMDeviceEnumerator enumerator)
+            {
                 error = "Failed to create MMDeviceEnumerator";
                 return false;
             }
@@ -48,7 +55,8 @@ internal sealed partial class SdlWasapiDriver : ISdlAudioDriver {
             _deviceEnumerator = enumerator;
 
             int hr = _deviceEnumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Console, out IMMDevice deviceEndpoint);
-            if (SdlWasapiResult.Failed(hr)) {
+            if (SdlWasapiResult.Failed(hr))
+            {
                 error = $"Failed to get default audio endpoint: 0x{hr:X8}";
                 return false;
             }
@@ -57,7 +65,8 @@ internal sealed partial class SdlWasapiDriver : ISdlAudioDriver {
 
             Guid iidAudioClient = SdlWasapiGuids.IidIaudioClient;
             hr = _device.Activate(ref iidAudioClient, ClsctxAll, IntPtr.Zero, out object audioClientObj);
-            if (SdlWasapiResult.Failed(hr) || audioClientObj is not IAudioClient audioClient) {
+            if (SdlWasapiResult.Failed(hr) || audioClientObj is not IAudioClient audioClient)
+            {
                 error = $"Failed to activate audio client: 0x{hr:X8}";
                 return false;
             }
@@ -67,7 +76,8 @@ internal sealed partial class SdlWasapiDriver : ISdlAudioDriver {
             // Reference: SDL_wasapi.c WASAPI_PrepDevice
             // Create event handle for buffer notifications
             _bufferEvent = NativeMethods.CreateEventW(IntPtr.Zero, false, false, null);
-            if (_bufferEvent == IntPtr.Zero) {
+            if (_bufferEvent == IntPtr.Zero)
+            {
                 error = "Failed to create event handle";
                 return false;
             }
@@ -76,14 +86,16 @@ internal sealed partial class SdlWasapiDriver : ISdlAudioDriver {
             // Get the device's mix format and use it as a base
             IntPtr waveformatPtr = IntPtr.Zero;
             hr = _audioClient.GetMixFormat(out waveformatPtr);
-            if (SdlWasapiResult.Failed(hr) || waveformatPtr == IntPtr.Zero) {
+            if (SdlWasapiResult.Failed(hr) || waveformatPtr == IntPtr.Zero)
+            {
                 error = $"Failed to get mix format: 0x{hr:X8}";
                 return false;
             }
 
             long defaultPeriod = 0;
 
-            try {
+            try
+            {
                 // Reference: SDL_wasapi.c line ~444
                 // this->spec.channels = (Uint8)waveformat->nChannels;
                 // SDL adopts the device's native channel count
@@ -93,7 +105,8 @@ internal sealed partial class SdlWasapiDriver : ISdlAudioDriver {
                 // Reference: SDL_wasapi.c WASAPI_PrepDevice
                 // GetDevicePeriod is called before Initialize in SDL
                 hr = _audioClient.GetDevicePeriod(out defaultPeriod, out _);
-                if (SdlWasapiResult.Failed(hr)) {
+                if (SdlWasapiResult.Failed(hr))
+                {
                     error = $"Failed to get device period: 0x{hr:X8}";
                     return false;
                 }
@@ -103,7 +116,8 @@ internal sealed partial class SdlWasapiDriver : ISdlAudioDriver {
                 // Only add AutoConvertPcm + SrcDefaultQuality when sample rate differs.
                 // Modify the mix format's sample rate in-place.
                 AudioClientStreamFlags streamflags = AudioClientStreamFlags.None;
-                if (desiredSpec.SampleRate != (int)waveformat.SamplesPerSec) {
+                if (desiredSpec.SampleRate != (int)waveformat.SamplesPerSec)
+                {
                     streamflags |= AudioClientStreamFlags.AutoConvertPcm |
                                    AudioClientStreamFlags.SrcDefaultQuality;
                     waveformat.SamplesPerSec = (uint)desiredSpec.SampleRate;
@@ -113,25 +127,30 @@ internal sealed partial class SdlWasapiDriver : ISdlAudioDriver {
 
                 streamflags |= AudioClientStreamFlags.EventCallback;
                 hr = _audioClient.Initialize(AudioClientShareMode.Shared, streamflags, 0, 0, waveformatPtr, IntPtr.Zero);
-                if (SdlWasapiResult.Failed(hr)) {
+                if (SdlWasapiResult.Failed(hr))
+                {
                     error = $"Failed to initialize audio client: 0x{hr:X8}";
                     return false;
                 }
 
                 // Store adopted channel count for later use
                 _channels = deviceChannels;
-            } finally {
+            }
+            finally
+            {
                 NativeMethods.CoTaskMemFree(waveformatPtr);
             }
 
             hr = _audioClient.SetEventHandle(_bufferEvent);
-            if (SdlWasapiResult.Failed(hr)) {
+            if (SdlWasapiResult.Failed(hr))
+            {
                 error = $"Failed to set event handle: 0x{hr:X8}";
                 return false;
             }
 
             hr = _audioClient.GetBufferSize(out uint bufferFrameCount);
-            if (SdlWasapiResult.Failed(hr)) {
+            if (SdlWasapiResult.Failed(hr))
+            {
                 error = $"Failed to get buffer size: 0x{hr:X8}";
                 return false;
             }
@@ -146,7 +165,8 @@ internal sealed partial class SdlWasapiDriver : ISdlAudioDriver {
             // Regardless of what we calculated for the period size, clamp it
             // to the expected hardware buffer size.
             // Reference: SDL_wasapi.c line ~499
-            if (calculatedFrames > (int)bufferFrameCount) {
+            if (calculatedFrames > (int)bufferFrameCount)
+            {
                 calculatedFrames = (int)bufferFrameCount;
             }
 
@@ -154,13 +174,15 @@ internal sealed partial class SdlWasapiDriver : ISdlAudioDriver {
             // If the device suggests a different sample size and we don't allow negotiation,
             // keep the desired buffer size instead of adopting the device's calculated size.
             int obtainedBufferFrames = calculatedFrames;
-            if (!desiredSpec.AllowNegotiate && calculatedFrames != desiredSpec.BufferFrames) {
+            if (!desiredSpec.AllowNegotiate && calculatedFrames != desiredSpec.BufferFrames)
+            {
                 obtainedBufferFrames = desiredSpec.BufferFrames;
             }
 
             Guid iidRenderClient = SdlWasapiGuids.IidIaudioRenderClient;
             hr = _audioClient.GetService(ref iidRenderClient, out IntPtr renderClientPtr);
-            if (SdlWasapiResult.Failed(hr) || renderClientPtr == IntPtr.Zero) {
+            if (SdlWasapiResult.Failed(hr) || renderClientPtr == IntPtr.Zero)
+            {
                 error = $"Failed to get render client: 0x{hr:X8}";
                 return false;
             }
@@ -178,12 +200,14 @@ internal sealed partial class SdlWasapiDriver : ISdlAudioDriver {
             // Reference: SDL_wasapi.c WASAPI_PrepDevice line ~536
             // IAudioClient_Start(client) is called at the end of PrepDevice
             hr = _audioClient.Start();
-            if (SdlWasapiResult.Failed(hr)) {
+            if (SdlWasapiResult.Failed(hr))
+            {
                 error = $"Failed to start audio client: 0x{hr:X8}";
                 return false;
             }
 
-            obtainedSpec = new AudioSpec {
+            obtainedSpec = new AudioSpec
+            {
                 SampleRate = desiredSpec.SampleRate,
                 Channels = _channels,
                 BufferFrames = obtainedBufferFrames,
@@ -195,68 +219,87 @@ internal sealed partial class SdlWasapiDriver : ISdlAudioDriver {
             sampleFrames = obtainedBufferFrames;
 
             return true;
-        } catch (COMException ex) {
+        }
+        catch (COMException ex)
+        {
             error = $"COM exception during Open: {ex.Message} (0x{ex.HResult:X8})";
             return false;
         }
     }
 
-    public void CloseDevice(SdlAudioDevice device) {
-        if (_audioClient != null) {
+    public void CloseDevice(SdlAudioDevice device)
+    {
+        if (_audioClient != null)
+        {
             _audioClient.Stop();
             _audioClient.Reset();
         }
 
-        if (_renderClient != null) {
+        if (_renderClient != null)
+        {
             Marshal.ReleaseComObject(_renderClient);
             _renderClient = null;
         }
 
-        if (_audioClient != null) {
+        if (_audioClient != null)
+        {
             Marshal.ReleaseComObject(_audioClient);
             _audioClient = null;
         }
 
-        if (_device != null) {
+        if (_device != null)
+        {
             Marshal.ReleaseComObject(_device);
             _device = null;
         }
 
-        if (_deviceEnumerator != null) {
+        if (_deviceEnumerator != null)
+        {
             Marshal.ReleaseComObject(_deviceEnumerator);
             _deviceEnumerator = null;
         }
 
-        if (_bufferEvent != IntPtr.Zero) {
+        if (_bufferEvent != IntPtr.Zero)
+        {
             NativeMethods.CloseHandle(_bufferEvent);
             _bufferEvent = IntPtr.Zero;
         }
     }
 
-    public void WaitDevice(SdlAudioDevice device) {
-        if (_audioClient == null || _renderClient == null || _bufferEvent == IntPtr.Zero) {
+    public void WaitDevice(SdlAudioDevice device)
+    {
+        if (_audioClient == null || _renderClient == null || _bufferEvent == IntPtr.Zero)
+        {
             device.SetDeviceDisconnected();
             return;
         }
 
         // Reference: SDL_wasapi.c WASAPI_WaitDevice
-        while (true) {
+        while (true)
+        {
             uint waitResult = NativeMethods.WaitForSingleObjectEx(_bufferEvent, WaitTimeoutMs, false);
-            if (waitResult == WaitObject0) {
+            if (waitResult == WaitObject0)
+            {
                 int hr = _audioClient.GetCurrentPadding(out uint padding);
-                if (SdlWasapiResult.Failed(hr)) {
+                if (SdlWasapiResult.Failed(hr))
+                {
                     device.SetDeviceDisconnected();
                     return;
                 }
 
                 // const UINT32 maxpadding = this->spec.samples;
                 // if (padding <= maxpadding) { break; }
-                if (padding <= (uint)_sampleFrames) {
+                if (padding <= (uint)_sampleFrames)
+                {
                     return;
                 }
-            } else if (waitResult == WaitTimeout) {
+            }
+            else if (waitResult == WaitTimeout)
+            {
                 continue;
-            } else {
+            }
+            else
+            {
                 _audioClient.Stop();
                 device.SetDeviceDisconnected();
                 return;
@@ -264,25 +307,31 @@ internal sealed partial class SdlWasapiDriver : ISdlAudioDriver {
         }
     }
 
-    public IntPtr GetDeviceBuf(SdlAudioDevice device) {
-        if (_renderClient == null) {
+    public IntPtr GetDeviceBuf(SdlAudioDevice device)
+    {
+        if (_renderClient == null)
+        {
             device.SetDeviceDisconnected();
             return IntPtr.Zero;
         }
 
         // Reference: SDL_wasapi.c WASAPI_GetDeviceBuf
-        while (true) {
+        while (true)
+        {
             int hr = _renderClient.GetBuffer((uint)_sampleFrames, out IntPtr dataPtr);
-            if (hr == SdlWasapiResult.AudioClientEBufferTooLarge) {
+            if (hr == SdlWasapiResult.AudioClientEBufferTooLarge)
+            {
                 // WASAPI_WaitDevice(this)
                 WaitDevice(device);
-                if (!device.Enabled) {
+                if (!device.Enabled)
+                {
                     return IntPtr.Zero;
                 }
                 continue;
             }
 
-            if (SdlWasapiResult.Failed(hr)) {
+            if (SdlWasapiResult.Failed(hr))
+            {
                 device.SetDeviceDisconnected();
                 return IntPtr.Zero;
             }
@@ -291,8 +340,10 @@ internal sealed partial class SdlWasapiDriver : ISdlAudioDriver {
         }
     }
 
-    public void PlayDevice(SdlAudioDevice device) {
-        if (_renderClient == null) {
+    public void PlayDevice(SdlAudioDevice device)
+    {
+        if (_renderClient == null)
+        {
             device.SetDeviceDisconnected();
             return;
         }
@@ -300,12 +351,14 @@ internal sealed partial class SdlWasapiDriver : ISdlAudioDriver {
         // Reference: SDL_wasapi.c WASAPI_PlayDevice
         // WasapiFailed(this, IAudioRenderClient_ReleaseBuffer(this->hidden->render, this->spec.samples, 0))
         int hr = _renderClient.ReleaseBuffer((uint)_sampleFrames, 0);
-        if (SdlWasapiResult.Failed(hr)) {
+        if (SdlWasapiResult.Failed(hr))
+        {
             device.SetDeviceDisconnected();
         }
     }
 
-    public void ThreadInit(SdlAudioDevice device) {
+    public void ThreadInit(SdlAudioDevice device)
+    {
         // Reference: SDL_wasapi_win32.c WASAPI_PlatformThreadInit
         // this thread uses COM.
         NativeMethods.CoInitializeEx(IntPtr.Zero, NativeMethods.COINIT_MULTITHREADED);
@@ -313,9 +366,11 @@ internal sealed partial class SdlWasapiDriver : ISdlAudioDriver {
         // Reference: SDL_wasapi_win32.c WASAPI_PlatformThreadInit
         // Set this thread to very high "Pro Audio" priority.
         _avrtHandle = NativeMethods.LoadLibraryW("avrt.dll");
-        if (_avrtHandle != IntPtr.Zero) {
+        if (_avrtHandle != IntPtr.Zero)
+        {
             IntPtr procAddr = NativeMethods.GetProcAddress(_avrtHandle, "AvSetMmThreadCharacteristicsW");
-            if (procAddr != IntPtr.Zero) {
+            if (procAddr != IntPtr.Zero)
+            {
                 AvSetMmThreadCharacteristicsWDelegate avSetMmThread =
                     Marshal.GetDelegateForFunctionPointer<AvSetMmThreadCharacteristicsWDelegate>(procAddr);
                 uint taskIndex = 0;
@@ -324,10 +379,13 @@ internal sealed partial class SdlWasapiDriver : ISdlAudioDriver {
         }
     }
 
-    public void ThreadDeinit(SdlAudioDevice device) {
-        if (_taskHandle != IntPtr.Zero && _avrtHandle != IntPtr.Zero) {
+    public void ThreadDeinit(SdlAudioDevice device)
+    {
+        if (_taskHandle != IntPtr.Zero && _avrtHandle != IntPtr.Zero)
+        {
             IntPtr procAddr = NativeMethods.GetProcAddress(_avrtHandle, "AvRevertMmThreadCharacteristics");
-            if (procAddr != IntPtr.Zero) {
+            if (procAddr != IntPtr.Zero)
+            {
                 AvRevertMmThreadCharacteristicsDelegate avRevert =
                     Marshal.GetDelegateForFunctionPointer<AvRevertMmThreadCharacteristicsDelegate>(procAddr);
                 avRevert(_taskHandle);
@@ -335,7 +393,8 @@ internal sealed partial class SdlWasapiDriver : ISdlAudioDriver {
             _taskHandle = IntPtr.Zero;
         }
 
-        if (_avrtHandle != IntPtr.Zero) {
+        if (_avrtHandle != IntPtr.Zero)
+        {
             NativeMethods.FreeLibrary(_avrtHandle);
             _avrtHandle = IntPtr.Zero;
         }
@@ -349,7 +408,8 @@ internal sealed partial class SdlWasapiDriver : ISdlAudioDriver {
     [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     private delegate bool AvRevertMmThreadCharacteristicsDelegate(IntPtr taskHandle);
 
-    private static partial class NativeMethods {
+    private static partial class NativeMethods
+    {
         public const uint COINIT_MULTITHREADED = 0x0;
 
         [LibraryImport("ole32.dll")]

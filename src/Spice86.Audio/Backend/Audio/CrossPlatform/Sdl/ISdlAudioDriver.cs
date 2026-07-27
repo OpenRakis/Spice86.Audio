@@ -7,7 +7,15 @@ using System;
 /// Reference: SDL_AudioDriverImpl from SDL_sysaudio.h
 /// Each platform (WASAPI, ALSA, CoreAudio) implements this interface.
 /// </summary>
-internal interface ISdlAudioDriver {
+internal interface ISdlAudioDriver
+{
+    /// <summary>
+    /// Gets a value indicating whether the backend owns the callback thread.
+    /// Drivers such as CoreAudio run their own callback loop and should not use
+    /// the shared SDL-style playback thread in <see cref="SdlAudioDevice"/>.
+    /// </summary>
+    bool ProvidesOwnCallbackThread { get; }
+
     /// <summary>
     /// Opens the audio device with the desired spec.
     /// Reference: SDL_AudioDriverImpl.OpenDevice

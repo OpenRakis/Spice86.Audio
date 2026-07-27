@@ -11,7 +11,8 @@ using System.Runtime.InteropServices;
 /// 
 /// These are macOS-only APIs from AudioToolbox.framework and CoreFoundation.framework.
 /// </summary>
-internal static class CoreAudioNativeMethods {
+internal static class CoreAudioNativeMethods
+{
     private const string AudioToolboxLib = "/System/Library/Frameworks/AudioToolbox.framework/AudioToolbox";
     private const string CoreFoundationLib = "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation";
 
@@ -23,7 +24,8 @@ internal static class CoreAudioNativeMethods {
     /// Reference: CoreAudioTypes.h
     /// </summary>
     [StructLayout(LayoutKind.Sequential)]
-    internal struct AudioStreamBasicDescription {
+    internal struct AudioStreamBasicDescription
+    {
         /// <summary>Sample rate in Hz.</summary>
         public double SampleRate;
 
@@ -58,7 +60,8 @@ internal static class CoreAudioNativeMethods {
     /// The native struct has more fields but we only need AudioData and the byte sizes.
     /// </summary>
     [StructLayout(LayoutKind.Sequential)]
-    internal struct AudioQueueBuffer {
+    internal struct AudioQueueBuffer
+    {
         /// <summary>The size in bytes of the allocated buffer data.</summary>
         public uint AudioDataBytesCapacity;
 
@@ -86,7 +89,8 @@ internal static class CoreAudioNativeMethods {
     /// Reference: CoreAudioTypes.h
     /// </summary>
     [StructLayout(LayoutKind.Sequential)]
-    internal struct AudioChannelLayout {
+    internal struct AudioChannelLayout
+    {
         /// <summary>Channel layout tag.</summary>
         public uint ChannelLayoutTag;
 
@@ -242,7 +246,8 @@ internal static class CoreAudioNativeMethods {
     /// <summary>
     /// Get kCFRunLoopDefaultMode - we need to load this from the framework.
     /// </summary>
-    internal static IntPtr GetDefaultRunLoopMode() {
+    internal static IntPtr GetDefaultRunLoopMode()
+    {
         IntPtr lib = NativeLibrary.Load(CoreFoundationLib);
         IntPtr symbolAddr = NativeLibrary.GetExport(lib, "kCFRunLoopDefaultMode");
         return Marshal.ReadIntPtr(symbolAddr);
@@ -253,7 +258,8 @@ internal static class CoreAudioNativeMethods {
 /// CoreAudio / AudioToolbox constants.
 /// Reference: CoreAudioTypes.h, AudioQueue.h
 /// </summary>
-internal static class CoreAudioConstants {
+internal static class CoreAudioConstants
+{
     // noErr
     internal const int NoErr = 0;
 
@@ -283,4 +289,27 @@ internal static class CoreAudioConstants {
     // Minimum audio buffer time in ms
     // Reference: SDL_coreaudio.m prepare_audioqueue line ~958
     internal const double MinimumAudioBufferTimeMs = 15.0;
+}
+
+/// <summary>
+/// Pure managed helper for SDL3 CoreAudio buffer-count policy.
+/// SDL3 uses three buffers by default and scales up only when the callback
+/// period is smaller than the minimum buffer time target.
+/// </summary>
+internal static class CoreAudioBufferPolicy
+{
+    public static int ComputeAudioBufferCount(int sampleRate, int bufferFrames)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sampleRate);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(bufferFrames);
+
+        int numAudioBuffers = 3;
+        double callbackPeriodMs = ((double)bufferFrames / sampleRate) * 1000.0;
+        if (callbackPeriodMs < CoreAudioConstants.MinimumAudioBufferTimeMs)
+        {
+            numAudioBuffers = (int)(Math.Ceiling(CoreAudioConstants.MinimumAudioBufferTimeMs / callbackPeriodMs) * 2);
+        }
+
+        return numAudioBuffers;
+    }
 }

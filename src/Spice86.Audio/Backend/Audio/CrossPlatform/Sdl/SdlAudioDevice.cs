@@ -8,7 +8,8 @@ using System.Threading;
 /// SDL audio device abstraction. Manages the audio thread and callback lifecycle.
 /// Reference: SDL_AudioDevice from SDL_sysaudio.h, open_audio_device/close_audio_device/SDL_RunAudio from SDL_audio.c
 /// </summary>
-internal sealed class SdlAudioDevice {
+internal sealed class SdlAudioDevice
+{
     private readonly ISdlAudioDriver _driver;
     private readonly object _mixerLock = new();
     private Thread? _audioThread;
@@ -18,7 +19,8 @@ internal sealed class SdlAudioDevice {
     private IntPtr _workBuffer;
     private SdlAudioDeviceCore? _core;
 
-    public SdlAudioDevice(ISdlAudioDriver driver) {
+    public SdlAudioDevice(ISdlAudioDriver driver)
+    {
         _driver = driver;
     }
 
@@ -63,7 +65,8 @@ internal sealed class SdlAudioDevice {
     /// Marks the device as disconnected.
     /// Reference: SDL_OpenedAudioDeviceDisconnected
     /// </summary>
-    internal void SetDeviceDisconnected() {
+    internal void SetDeviceDisconnected()
+    {
         _enabled = false;
     }
 
@@ -74,7 +77,8 @@ internal sealed class SdlAudioDevice {
     /// The audio thread is created here and waits for the startup semaphore,
     /// matching SDL's open_audio_device which creates the thread and SemWaits.
     /// </summary>
-    public bool Open(AudioSpec desiredSpec) {
+    public bool Open(AudioSpec desiredSpec)
+    {
         // Reference: open_audio_device lines 1468-1470
         _shutdown = false;
         _paused = true;
@@ -84,7 +88,8 @@ internal sealed class SdlAudioDevice {
         int bufferFrames = desiredSpec.BufferFrames > 0
             ? desiredSpec.BufferFrames
             : GetDefaultSamplesFromFreq(desiredSpec.SampleRate);
-        AudioSpec requestedSpec = new AudioSpec {
+        AudioSpec requestedSpec = new AudioSpec
+        {
             SampleRate = desiredSpec.SampleRate,
             Channels = desiredSpec.Channels,
             BufferFrames = bufferFrames,
@@ -93,7 +98,8 @@ internal sealed class SdlAudioDevice {
         };
 
         bool ok = _driver.OpenDevice(this, requestedSpec, out AudioSpec obtainedSpec, out int sampleFrames, out string? error);
-        if (!ok) {
+        if (!ok)
+        {
             LastError = error;
             return false;
         }
@@ -102,22 +108,31 @@ internal sealed class SdlAudioDevice {
         ObtainedSpec = obtainedSpec;
         SampleFrames = sampleFrames;
         BufferSizeBytes = SampleFrames * ObtainedSpec.Channels * sizeof(float);
-        if (ObtainedSpec.Callback != null) {
+        if (ObtainedSpec.Callback != null)
+        {
             _core = new SdlAudioDeviceCore(ObtainedSpec, BufferSizeBytes);
+        }
+
+        if (_driver.ProvidesOwnCallbackThread)
+        {
+            return true;
         }
 
         // Reference: open_audio_device line 1512
         // device->work_buffer = (Uint8 *)SDL_malloc(device->callbackspec.size)
         _workBuffer = Marshal.AllocHGlobal(BufferSizeBytes);
-        unsafe {
+        unsafe
+        {
             NativeMemory.Clear(_workBuffer.ToPointer(), (nuint)BufferSizeBytes);
         }
 
         // Reference: open_audio_device lines 1548-1572
         // SDL creates the audio thread during open_audio_device and waits
         // for it to signal via a semaphore that ThreadInit has completed.
-        using (SemaphoreSlim startupSemaphore = new SemaphoreSlim(0, 1)) {
-            _audioThread = new Thread(() => RunAudio(startupSemaphore)) {
+        using (SemaphoreSlim startupSemaphore = new SemaphoreSlim(0, 1))
+        {
+            _audioThread = new Thread(() => RunAudio(startupSemaphore))
+            {
                 Name = "SDL-Audio-Playback",
                 IsBackground = true
             };
@@ -132,7 +147,8 @@ internal sealed class SdlAudioDevice {
     /// Unpauses the audio device.
     /// Reference: SDL_PauseAudioDevice(device, 0)
     /// </summary>
-    public void Start() {
+    public void Start()
+    {
         _paused = false;
     }
 
@@ -140,7 +156,8 @@ internal sealed class SdlAudioDevice {
     /// Pauses audio playback.
     /// Reference: SDL_PauseAudioDevice(device, 1)
     /// </summary>
-    public void Pause() {
+    public void Pause()
+    {
         _paused = true;
     }
 
@@ -148,22 +165,26 @@ internal sealed class SdlAudioDevice {
     /// Closes the device and stops the audio thread.
     /// Reference: close_audio_device() from SDL_audio.c lines 1196-1236
     /// </summary>
-    public void Close() {
+    public void Close()
+    {
         // Reference: close_audio_device lines 1204-1209
         // Lock, set paused+shutdown+enabled, unlock, then wait for thread.
-        lock (_mixerLock) {
+        lock (_mixerLock)
+        {
             _paused = true;
             _shutdown = true;
             _enabled = false;
         }
 
-        if (_audioThread != null && _audioThread.IsAlive) {
+        if (_audioThread != null && _audioThread.IsAlive)
+        {
             _audioThread.Join(TimeSpan.FromSeconds(2));
         }
         _audioThread = null;
         _core = null;
 
-        if (_workBuffer != IntPtr.Zero) {
+        if (_workBuffer != IntPtr.Zero)
+        {
             Marshal.FreeHGlobal(_workBuffer);
             _workBuffer = IntPtr.Zero;
         }
@@ -175,7 +196,8 @@ internal sealed class SdlAudioDevice {
     /// The audio thread main loop.
     /// Reference: SDL_RunAudio from SDL_audio.c lines 672-804
     /// </summary>
-    private unsafe void RunAudio(SemaphoreSlim startupSemaphore) {
+    private unsafe void RunAudio(SemaphoreSlim startupSemaphore)
+    {
         // SDL_SetThreadPriority(SDL_THREAD_PRIORITY_TIME_CRITICAL)
         Thread.CurrentThread.Priority = ThreadPriority.Highest;
 
@@ -186,40 +208,52 @@ internal sealed class SdlAudioDevice {
         _driver.ThreadInit(this);
 
         // Loop, filling the audio buffers
-        while (!_shutdown) {
+        while (!_shutdown)
+        {
             IntPtr data;
 
             // if (!device->stream && SDL_AtomicGet(&device->enabled))
-            if (_enabled) {
+            if (_enabled)
+            {
                 data = _driver.GetDeviceBuf(this);
-            } else {
+            }
+            else
+            {
                 data = IntPtr.Zero;
             }
 
             bool usingWorkBuffer = data == IntPtr.Zero;
-            if (usingWorkBuffer) {
+            if (usingWorkBuffer)
+            {
                 data = _workBuffer;
             }
 
             int dataLen = BufferSizeBytes;
 
             // SDL_LockMutex(device->mixer_lock)
-            lock (_mixerLock) {
-                if (_paused) {
+            lock (_mixerLock)
+            {
+                if (_paused)
+                {
                     // SDL_memset(data, device->callbackspec.silence, data_len)
                     NativeMemory.Clear(data.ToPointer(), (nuint)dataLen);
-                } else if (_core != null) {
+                }
+                else if (_core != null)
+                {
                     _core.FillDeviceBuffer(data, dataLen);
                 }
             }
             // SDL_UnlockMutex(device->mixer_lock)
 
-            if (usingWorkBuffer) {
+            if (usingWorkBuffer)
+            {
                 // nothing to do; pause like we queued a buffer to play.
                 // delay = ((device->spec.samples * 1000) / device->spec.freq)
                 int delay = (SampleFrames * 1000) / ObtainedSpec.SampleRate;
                 Thread.Sleep(delay);
-            } else {
+            }
+            else
+            {
                 // current_audio.impl.PlayDevice(device)
                 _driver.PlayDevice(this);
                 // current_audio.impl.WaitDevice(device)
@@ -230,7 +264,8 @@ internal sealed class SdlAudioDevice {
         // Wait for the audio to drain.
         // delay = ((device->spec.samples * 1000) / device->spec.freq) * 2
         int drainDelay = ((SampleFrames * 1000) / ObtainedSpec.SampleRate) * 2;
-        if (drainDelay > 100) {
+        if (drainDelay > 100)
+        {
             drainDelay = 100;
         }
         Thread.Sleep(drainDelay);
@@ -243,14 +278,17 @@ internal sealed class SdlAudioDevice {
     /// Fills the audio buffer via the callback or with silence.
     /// Reference: SDL_RunAudio callback invocation (lines 720-770)
     /// </summary>
-    internal unsafe void FillAudioBuffer(IntPtr bufferPtr, int bufferBytes) {
+    internal unsafe void FillAudioBuffer(IntPtr bufferPtr, int bufferBytes)
+    {
         // Reference: SDL_RunAudio lines 740-743
-        if (_paused) {
+        if (_paused)
+        {
             NativeMemory.Clear(bufferPtr.ToPointer(), (nuint)bufferBytes);
             return;
         }
 
-        if (_core != null) {
+        if (_core != null)
+        {
             _core.FillDeviceBuffer(bufferPtr, bufferBytes);
             return;
         }
@@ -262,11 +300,13 @@ internal sealed class SdlAudioDevice {
     /// Computes the default sample frames from frequency.
     /// Reference: GetDefaultSamplesFromFreq in SDL_audio.c
     /// </summary>
-    private static int GetDefaultSamplesFromFreq(int frequency) {
+    private static int GetDefaultSamplesFromFreq(int frequency)
+    {
         // Pick a default of ~46 ms at desired frequency
         int maxSampleFrames = (frequency / 1000) * 46;
         int current = 1;
-        while (current < maxSampleFrames) {
+        while (current < maxSampleFrames)
+        {
             current *= 2;
         }
         return current;
