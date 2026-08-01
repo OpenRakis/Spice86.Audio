@@ -94,7 +94,8 @@ internal sealed class SdlAudioDevice
             Channels = desiredSpec.Channels,
             BufferFrames = bufferFrames,
             Callback = desiredSpec.Callback,
-            PostmixCallback = desiredSpec.PostmixCallback
+            PostmixCallback = desiredSpec.PostmixCallback,
+            AllowNegotiate = desiredSpec.AllowNegotiate
         };
 
         bool ok = _driver.OpenDevice(this, requestedSpec, out AudioSpec obtainedSpec, out int sampleFrames, out string? error);
