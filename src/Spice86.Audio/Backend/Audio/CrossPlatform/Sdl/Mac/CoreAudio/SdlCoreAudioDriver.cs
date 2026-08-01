@@ -33,6 +33,9 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver
     private GCHandle _callbackHandle;
     private IntPtr _defaultRunLoopMode;
     private uint _deviceId;
+    private int _obtainedSampleRate;
+    private int _obtainedChannels;
+    private int _obtainedBufferFrames;
 
     /// <summary>
     /// Gets a value indicating whether CoreAudio owns the callback thread.
@@ -61,6 +64,9 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver
         _shutdown = false;
         _threadError = null;
         _deviceId = 0;
+        _obtainedSampleRate = 0;
+        _obtainedChannels = 0;
+        _obtainedBufferFrames = 0;
 
         int channels = desiredSpec.Channels;
         int freq = desiredSpec.SampleRate;
@@ -98,16 +104,21 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver
             return false;
         }
 
-        int finalBufferFrames = bufferFrames;
+        int obtainedRate = _obtainedSampleRate > 0 ? _obtainedSampleRate : freq;
+        int obtainedChannels = _obtainedChannels > 0 ? _obtainedChannels : channels;
+        int finalBufferFrames = _obtainedBufferFrames > 0 ? _obtainedBufferFrames : bufferFrames;
+
         if (!desiredSpec.AllowNegotiate)
         {
+            obtainedRate = freq;
+            obtainedChannels = channels;
             finalBufferFrames = desiredSpec.BufferFrames;
         }
 
         obtainedSpec = new AudioSpec
         {
-            SampleRate = freq,
-            Channels = channels,
+            SampleRate = obtainedRate,
+            Channels = obtainedChannels,
             BufferFrames = finalBufferFrames,
             Callback = desiredSpec.Callback,
             PostmixCallback = desiredSpec.PostmixCallback,
@@ -456,6 +467,13 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver
             return false;
         }
 
+        if (!UpdateObtainedFormatFromQueue(bufferFrames, channels))
+        {
+            CoreAudioNativeMethods.AudioQueueDispose(_audioQueue, 1);
+            _audioQueue = IntPtr.Zero;
+            return false;
+        }
+
         // Reference: prepare_audioqueue line ~920-944
         // Set channel layout
         CoreAudioNativeMethods.AudioChannelLayout layout = new();
@@ -537,6 +555,25 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver
                     (CoreAudioNativeMethods.AudioQueueBuffer*)_audioBuffers[i];
                 NativeMemory.Clear(bufPtr->AudioData.ToPointer(), bufPtr->AudioDataBytesCapacity);
                 bufPtr->AudioDataByteSize = bufPtr->AudioDataBytesCapacity;
+
+                if (i == 0)
+                {
+                    int bytesPerFrame = channels * sizeof(float);
+                    int obtainedFrames;
+                    if (bytesPerFrame > 0)
+                    {
+                        obtainedFrames = (int)(bufPtr->AudioDataBytesCapacity / (uint)bytesPerFrame);
+                    }
+                    else
+                    {
+                        obtainedFrames = 0;
+                    }
+
+                    if (obtainedFrames > 0)
+                    {
+                        _obtainedBufferFrames = obtainedFrames;
+                    }
+                }
             }
 
             // Enqueue the buffer
@@ -564,6 +601,52 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver
         }
 
         return true;
+    }
+
+    private bool UpdateObtainedFormatFromQueue(int requestedBufferFrames, int requestedChannels)
+    {
+        int streamDescSize = Marshal.SizeOf<CoreAudioNativeMethods.AudioStreamBasicDescription>();
+        IntPtr streamDescPtr = Marshal.AllocHGlobal(streamDescSize);
+
+        try
+        {
+            uint size = (uint)streamDescSize;
+            int result = CoreAudioNativeMethods.AudioQueueGetProperty(
+                _audioQueue,
+                CoreAudioConstants.AudioQueuePropertyStreamDescription,
+                streamDescPtr,
+                ref size);
+
+            if (result != CoreAudioConstants.NoErr)
+            {
+                _threadError = $"CoreAudio: AudioQueueGetProperty(kAudioQueueProperty_StreamDescription) failed with error {result}";
+                return false;
+            }
+
+            CoreAudioNativeMethods.AudioStreamBasicDescription queueFormat =
+                Marshal.PtrToStructure<CoreAudioNativeMethods.AudioStreamBasicDescription>(streamDescPtr);
+
+            _obtainedSampleRate = (int)Math.Round(queueFormat.SampleRate);
+            _obtainedChannels = (int)queueFormat.ChannelsPerFrame;
+
+            if (_obtainedChannels <= 0)
+            {
+                _obtainedChannels = requestedChannels;
+            }
+
+            _obtainedBufferFrames = requestedBufferFrames;
+
+            if (_obtainedSampleRate <= 0)
+            {
+                _obtainedSampleRate = 0;
+            }
+
+            return true;
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(streamDescPtr);
+        }
     }
 
     /// <summary>
@@ -639,8 +722,15 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver
                 // Reference: outputCallback line 487-489
                 // Enqueue the buffer back and set its size
                 bufPtr->AudioDataByteSize = bufPtr->AudioDataBytesCapacity;
-                CoreAudioNativeMethods.AudioQueueEnqueueBuffer(
+                int enqueueResult = CoreAudioNativeMethods.AudioQueueEnqueueBuffer(
                     inAudioQueue, inBuffer, 0, IntPtr.Zero);
+
+                if (enqueueResult != CoreAudioConstants.NoErr)
+                {
+                    _device.SetDeviceDisconnected();
+                    _threadError = $"CoreAudio: AudioQueueEnqueueBuffer failed in callback with error {enqueueResult}";
+                    return;
+                }
             }
         }
     }
