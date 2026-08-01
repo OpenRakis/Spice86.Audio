@@ -180,17 +180,6 @@ internal static class CoreAudioNativeMethods
         uint inDataSize);
 
     /// <summary>
-    /// Gets an AudioQueue property into unmanaged storage.
-    /// Used to read the queue's effective stream description after creation.
-    /// </summary>
-    [DllImport(AudioToolboxLib, EntryPoint = "AudioQueueGetProperty")]
-    internal static extern int AudioQueueGetProperty(
-        IntPtr inAQ,
-        uint inID,
-        IntPtr outData,
-        ref uint ioDataSize);
-
-    /// <summary>
     /// Reads a UInt32 property value from a CoreAudio object.
     /// Used for default device identifiers and boolean-style device flags.
     /// </summary>
@@ -299,7 +288,6 @@ internal static class CoreAudioConstants
     internal const uint LinearPcmFormatFlagIsPacked = 1 << 3;
     internal const uint AudioQueuePropertyChannelLayout = 0x61716368;
     internal static readonly uint AudioQueuePropertyCurrentDevice = MakeFourCc("aqcd");
-    internal static readonly uint AudioQueuePropertyStreamDescription = MakeFourCc("aqft");
     internal static readonly uint AudioHardwarePropertyDefaultOutputDevice = MakeFourCc("dOut");
     internal static readonly uint AudioDevicePropertyDeviceUid = MakeFourCc("uid ");
     internal static readonly uint AudioDevicePropertyDeviceIsAlive = MakeFourCc("livn");
@@ -309,10 +297,13 @@ internal static class CoreAudioConstants
     internal const uint AudioObjectPropertyElementMain = 0;
     internal const uint AudioChannelLayoutTagMono = (100 << 16) | 1;
     internal const uint AudioChannelLayoutTagStereo = (101 << 16) | 2;
-    internal const uint AudioChannelLayoutTagDvd4 = (134 << 16) | 3;
     internal const uint AudioChannelLayoutTagQuadraphonic = (108 << 16) | 4;
-    internal const uint AudioChannelLayoutTagDvd6 = (136 << 16) | 5;
-    internal const uint AudioChannelLayoutTagDvd12 = (142 << 16) | 6;
+    internal const uint AudioChannelLayoutTagMpeg51A = (121 << 16) | 6;
+    internal const uint AudioChannelLayoutTagDvd4 = (133 << 16) | 3;
+    internal const uint AudioChannelLayoutTagDvd6 = (135 << 16) | 5;
+    internal const uint AudioChannelLayoutTagDvd12 = AudioChannelLayoutTagMpeg51A;
+    internal const uint AudioChannelLayoutTagWave61 = (188 << 16) | 7;
+    internal const uint AudioChannelLayoutTagWave71 = (189 << 16) | 8;
     internal const double MinimumAudioBufferTimeMs = 15.0;
 
     private static uint MakeFourCc(string value)
