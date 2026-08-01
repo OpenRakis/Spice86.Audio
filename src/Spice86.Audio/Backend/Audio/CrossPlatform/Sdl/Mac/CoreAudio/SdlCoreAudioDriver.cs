@@ -6,8 +6,14 @@ using System.Runtime.Versioning;
 using System.Threading;
 
 /// <summary>
-/// CoreAudio (AudioQueue) driver implementing ISdlAudioDriver.
-/// This is an exact port of SDL_coreaudio.m (SDL2) to C#.
+/// SDL3-inspired CoreAudio AudioQueue driver implementing <see cref="ISdlAudioDriver"/>.
+/// References:
+/// - SDL/src/audio/coreaudio/SDL_coreaudio.m
+/// - SDL/src/audio/coreaudio/SDL_coreaudio.h
+/// 
+/// This driver now follows the SDL3 playback control flow for default-device
+/// selection, AudioQueue ownership, and queue-buffer lifecycle, while keeping
+/// the managed Spice86.Audio float callback contract unchanged.
 /// </summary>
 [SupportedOSPlatform("osx")]
 internal sealed class SdlCoreAudioDriver : ISdlAudioDriver
@@ -28,11 +34,23 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver
     private IntPtr _defaultRunLoopMode;
     private uint _deviceId;
 
+    /// <summary>
+    /// Gets a value indicating whether CoreAudio owns the callback thread.
+    /// SDL3 marks CoreAudio as <c>ProvidesOwnCallbackThread</c> because
+    /// AudioQueue callbacks are driven by a CFRunLoop rather than SDL's
+    /// generic playback thread.
+    /// </summary>
     public bool ProvidesOwnCallbackThread => true;
 
     /// <summary>
     /// Opens the CoreAudio AudioQueue device.
-    /// Reference: COREAUDIO_OpenDevice (SDL_coreaudio.m line 1062)
+    /// Reference: SDL_coreaudio.m COREAUDIO_OpenDevice.
+    /// 
+    /// Actual managed flow:
+    /// 1. Resolve and preflight the default macOS output device.
+    /// 2. Build the managed mix-buffer state for the requested callback format.
+    /// 3. Spawn the AudioQueue thread so queue creation happens on its own run loop.
+    /// 4. Return the obtained playback spec used by the managed mixer.
     /// </summary>
     public bool OpenDevice(SdlAudioDevice device, AudioSpec desiredSpec, out AudioSpec obtainedSpec, out int sampleFrames, out string? error)
     {
@@ -100,6 +118,16 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver
         return true;
     }
 
+    /// <summary>
+    /// Resolves and validates the default macOS playback device.
+    /// Reference: SDL_coreaudio.m PrepareDevice.
+    /// 
+    /// The full SDL3 backend works with discovered device handles; the managed
+    /// Spice86.Audio port currently supports default-device playback only, so it
+    /// mirrors SDL3's validation logic against the current default output device.
+    /// </summary>
+    /// <param name="error">Receives a human-readable failure description.</param>
+    /// <returns><see langword="true"/> if the default output device is usable.</returns>
     private bool PrepareDevice(out string? error)
     {
         error = null;
@@ -169,6 +197,11 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver
         return true;
     }
 
+    /// <summary>
+    /// Binds the AudioQueue to the previously selected CoreAudio device UID.
+    /// Reference: SDL_coreaudio.m AssignDeviceToAudioQueue.
+    /// </summary>
+    /// <returns><see langword="true"/> if the queue is bound to the selected device.</returns>
     private bool AssignDeviceToAudioQueue()
     {
         if (_deviceId == 0)
@@ -221,7 +254,7 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver
 
     /// <summary>
     /// Closes the CoreAudio device.
-    /// Reference: COREAUDIO_CloseDevice (SDL_coreaudio.m line 665)
+    /// Reference: SDL_coreaudio.m COREAUDIO_CloseDevice.
     /// 
     /// Flow:
     /// 1. Set paused flag to feed silence from callback
@@ -274,10 +307,8 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver
 
     /// <summary>
     /// WaitDevice for CoreAudio is a no-op.
-    /// CoreAudio uses ProvidesOwnCallbackThread, so SDL_RunAudio's
-    /// WaitDevice/GetDeviceBuffer/PlayDevice loop is never used.
-    /// The SdlAudioDevice thread will just idle, and CloseDevice's
-    /// shutdown flag will break it out.
+    /// Reference: SDL3 sets <c>ProvidesOwnCallbackThread</c> for CoreAudio, so
+    /// SDL's generic WaitDevice/GetDeviceBuf/PlayDevice loop is bypassed.
     /// </summary>
     public void WaitDevice(SdlAudioDevice device)
     {
@@ -287,8 +318,8 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver
     }
 
     /// <summary>
-    /// GetDeviceBuf for CoreAudio returns null.
-    /// CoreAudio fills buffers directly in its outputCallback.
+    /// GetDeviceBuf for CoreAudio returns <see cref="IntPtr.Zero"/>.
+    /// The AudioQueue callback path fills and re-enqueues buffers directly.
     /// </summary>
     public IntPtr GetDeviceBuf(SdlAudioDevice device)
     {
@@ -297,16 +328,16 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver
 
     /// <summary>
     /// PlayDevice for CoreAudio is a no-op.
-    /// CoreAudio enqueues buffers directly in its outputCallback.
+    /// The AudioQueue callback path re-enqueues buffers directly.
     /// </summary>
     public void PlayDevice(SdlAudioDevice device)
     {
     }
 
     /// <summary>
-    /// ThreadInit for CoreAudio - sets thread priority.
-    /// Reference: audioqueue_thread line 1020
-    /// SDL_SetThreadPriority(SDL_THREAD_PRIORITY_HIGH)
+    /// ThreadInit for CoreAudio is a no-op in the managed SDL thread.
+    /// Reference: SDL3 does its priority adjustment in AudioQueueThreadEntry,
+    /// which corresponds to <see cref="AudioQueueThreadProc(int, int, int)"/>.
     /// </summary>
     public void ThreadInit(SdlAudioDevice device)
     {
@@ -323,7 +354,7 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver
 
     /// <summary>
     /// The AudioQueue thread function.
-    /// Reference: audioqueue_thread (SDL_coreaudio.m line 991)
+    /// Reference: SDL_coreaudio.m AudioQueueThreadEntry.
     /// 
     /// Flow:
     /// 1. Call prepare_audioqueue (creates AudioQueue on this thread's CFRunLoop)
@@ -370,13 +401,13 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver
 
     /// <summary>
     /// Prepares the AudioQueue.
-    /// Reference: prepare_audioqueue (SDL_coreaudio.m line 896)
+    /// Reference: SDL_coreaudio.m PrepareAudioQueue.
     /// 
-    /// Flow:
-    /// 1. Create AudioQueueNewOutput with float PCM format
-    /// 2. Set channel layout
-    /// 3. Allocate and enqueue audio buffers
-    /// 4. Start the AudioQueue
+    /// Actual managed flow:
+    /// 1. Create an output queue for the requested managed float mix format.
+    /// 2. Bind the queue to the selected CoreAudio default device.
+    /// 3. Apply SDL3-style channel-layout and buffer-count policy.
+    /// 4. Prime the queue with silence and start playback.
     /// </summary>
     private bool PrepareAudioQueue(int sampleRate, int channels, int bufferFrames)
     {
@@ -537,12 +568,14 @@ internal sealed class SdlCoreAudioDriver : ISdlAudioDriver
 
     /// <summary>
     /// The AudioQueue output callback.
-    /// Reference: outputCallback (SDL_coreaudio.m line 461)
+    /// Reference: SDL_coreaudio.m PlaybackBufferReadyCallback and the non-stream
+    /// callback path it eventually drives through SDL_PlaybackAudioThreadIterate.
     /// 
     /// This is called by CoreAudio when a buffer has been consumed and needs refilling.
-    /// The callback directly invokes the user callback to get audio data.
+    /// The managed port uses a private mix buffer and the public float callback
+    /// contract to refill the AudioQueue buffer before immediately re-enqueueing it.
     /// 
-    /// SDL flow (non-stream path, which is what we use):
+    /// Managed callback flow:
     /// 1. Lock mixer_lock
     /// 2. While remaining bytes in buffer:
     ///    a. If bufferOffset >= bufferSize, call user callback to fill mix buffer

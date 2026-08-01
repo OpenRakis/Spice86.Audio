@@ -6,7 +6,7 @@ using System;
 /// Callback delegate invoked by the audio backend when it needs audio data.
 /// Reference: SDL_AudioCallback from SDL_audio.h
 /// </summary>
-/// <param name="buffer">Buffer to fill with audio samples (interleaved float stereo).</param>
+/// <param name="buffer">Buffer to fill with interleaved float samples in the obtained channel layout.</param>
 /// <remarks>
 /// This callback is called from the audio thread. Implementations must be thread-safe
 /// and should not block. Fill the buffer with silence (zeros) if no audio is available.
@@ -21,9 +21,12 @@ public delegate void AudioCallback(Span<float> buffer);
 public delegate void AudioPostmixCallback(Span<float> buffer);
 
 /// <summary>
-/// Audio format specification matching SDL_AudioSpec.
+/// Audio format specification matching the managed subset of SDL_AudioSpec.
+/// The callback-facing mix format is always interleaved float samples even when
+/// a backend negotiates a different native device representation internally.
 /// </summary>
-public sealed class AudioSpec {
+public sealed class AudioSpec
+{
     /// <summary>
     /// Sample rate in Hz (e.g., 48000).
     /// </summary>
@@ -61,7 +64,7 @@ public sealed class AudioSpec {
     public int BufferSamples => BufferFrames * Channels;
 
     /// <summary>
-    /// Gets the buffer size in bytes (for float samples).
+    /// Gets the buffer size in bytes for the managed float callback representation.
     /// </summary>
     public int BufferBytes => BufferSamples * sizeof(float);
 }
@@ -69,7 +72,8 @@ public sealed class AudioSpec {
 /// <summary>
 /// Audio device state.
 /// </summary>
-public enum AudioDeviceState {
+public enum AudioDeviceState
+{
     /// <summary>
     /// Device is stopped/paused.
     /// </summary>

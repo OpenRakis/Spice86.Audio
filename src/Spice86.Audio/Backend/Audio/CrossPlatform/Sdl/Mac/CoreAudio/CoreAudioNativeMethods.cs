@@ -4,12 +4,15 @@ using System;
 using System.Runtime.InteropServices;
 
 /// <summary>
-/// P/Invoke bindings for Apple AudioToolbox (AudioQueue API).
-/// Reference: SDL_coreaudio.m uses AudioQueueNewOutput, AudioQueueAllocateBuffer,
-/// AudioQueueEnqueueBuffer, AudioQueueStart, AudioQueueStop, AudioQueueFlush,
-/// AudioQueueDispose, AudioQueueSetProperty, and CoreFoundation's CFRunLoop.
+/// P/Invoke bindings for the subset of CoreAudio, AudioToolbox, and CoreFoundation
+/// used by the managed macOS audio backend.
+/// References:
+/// - SDL/src/audio/coreaudio/SDL_coreaudio.m
+/// - SDL/src/audio/coreaudio/SDL_coreaudio.h
+/// - Apple AudioQueue and AudioObject property APIs
 /// 
-/// These are macOS-only APIs from AudioToolbox.framework and CoreFoundation.framework.
+/// These bindings model the default-device playback flow actually used by
+/// Spice86.Audio rather than the full SDL3 device-enumeration surface.
 /// </summary>
 internal static class CoreAudioNativeMethods
 {
@@ -77,6 +80,7 @@ internal static class CoreAudioNativeMethods
 
     /// <summary>
     /// AudioQueue output callback delegate.
+    /// Reference: AudioQueue.h AudioQueueOutputCallback.
     /// </summary>
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     internal delegate void AudioQueueOutputCallback(
@@ -84,6 +88,10 @@ internal static class CoreAudioNativeMethods
         IntPtr inAudioQueue,
         IntPtr inBuffer);
 
+    /// <summary>
+    /// Creates a playback AudioQueue bound to the calling thread's run loop.
+    /// Reference: SDL_coreaudio.m PrepareAudioQueue -> AudioQueueNewOutput.
+    /// </summary>
     [DllImport(AudioToolboxLib, EntryPoint = "AudioQueueNewOutput")]
     internal static extern int AudioQueueNewOutput(
         ref AudioStreamBasicDescription inFormat,
@@ -94,12 +102,20 @@ internal static class CoreAudioNativeMethods
         uint inFlags,
         out IntPtr outAQ);
 
+    /// <summary>
+    /// Allocates an AudioQueue buffer.
+    /// Reference: SDL_coreaudio.m PrepareAudioQueue -> AudioQueueAllocateBuffer.
+    /// </summary>
     [DllImport(AudioToolboxLib, EntryPoint = "AudioQueueAllocateBuffer")]
     internal static extern int AudioQueueAllocateBuffer(
         IntPtr inAQ,
         uint inBufferByteSize,
         out IntPtr outBuffer);
 
+    /// <summary>
+    /// Enqueues an AudioQueue buffer for playback.
+    /// Reference: SDL_coreaudio.m PlaybackBufferReadyCallback / PrepareAudioQueue.
+    /// </summary>
     [DllImport(AudioToolboxLib, EntryPoint = "AudioQueueEnqueueBuffer")]
     internal static extern int AudioQueueEnqueueBuffer(
         IntPtr inAQ,
@@ -107,24 +123,44 @@ internal static class CoreAudioNativeMethods
         uint inNumPacketDescs,
         IntPtr inPacketDescs);
 
+    /// <summary>
+    /// Starts the AudioQueue.
+    /// Reference: SDL_coreaudio.m PrepareAudioQueue -> AudioQueueStart.
+    /// </summary>
     [DllImport(AudioToolboxLib, EntryPoint = "AudioQueueStart")]
     internal static extern int AudioQueueStart(
         IntPtr inAQ,
         IntPtr inStartTime);
 
+    /// <summary>
+    /// Stops the AudioQueue.
+    /// Reference: SDL_coreaudio.m COREAUDIO_CloseDevice -> AudioQueueStop.
+    /// </summary>
     [DllImport(AudioToolboxLib, EntryPoint = "AudioQueueStop")]
     internal static extern int AudioQueueStop(
         IntPtr inAQ,
         byte inImmediate);
 
+    /// <summary>
+    /// Flushes queued playback buffers.
+    /// Reference: SDL_coreaudio.m COREAUDIO_CloseDevice -> AudioQueueFlush.
+    /// </summary>
     [DllImport(AudioToolboxLib, EntryPoint = "AudioQueueFlush")]
     internal static extern int AudioQueueFlush(IntPtr inAQ);
 
+    /// <summary>
+    /// Disposes the AudioQueue and its buffers.
+    /// Reference: SDL_coreaudio.m COREAUDIO_CloseDevice -> AudioQueueDispose.
+    /// </summary>
     [DllImport(AudioToolboxLib, EntryPoint = "AudioQueueDispose")]
     internal static extern int AudioQueueDispose(
         IntPtr inAQ,
         byte inImmediate);
 
+    /// <summary>
+    /// Sets an AudioQueue property using unmanaged memory.
+    /// Reference: SDL_coreaudio.m PrepareAudioQueue -> AudioQueueSetProperty.
+    /// </summary>
     [DllImport(AudioToolboxLib, EntryPoint = "AudioQueueSetProperty")]
     internal static extern int AudioQueueSetProperty(
         IntPtr inAQ,
@@ -132,6 +168,10 @@ internal static class CoreAudioNativeMethods
         IntPtr inData,
         uint inDataSize);
 
+    /// <summary>
+    /// Sets an AudioQueue property using a pointer-sized value.
+    /// Reference: SDL_coreaudio.m AssignDeviceToAudioQueue -> kAudioQueueProperty_CurrentDevice.
+    /// </summary>
     [DllImport(AudioToolboxLib, EntryPoint = "AudioQueueSetProperty")]
     internal static extern int AudioQueueSetProperty(
         IntPtr inAQ,
@@ -139,6 +179,10 @@ internal static class CoreAudioNativeMethods
         ref IntPtr inData,
         uint inDataSize);
 
+    /// <summary>
+    /// Reads a UInt32 property value from a CoreAudio object.
+    /// Used for default device identifiers and boolean-style device flags.
+    /// </summary>
     [DllImport(CoreAudioLib, EntryPoint = "AudioObjectGetPropertyData")]
     internal static extern int AudioObjectGetPropertyData(
         uint inObjectID,
@@ -148,6 +192,10 @@ internal static class CoreAudioNativeMethods
         ref uint ioDataSize,
         out uint outData);
 
+    /// <summary>
+    /// Reads an Int32 property value from a CoreAudio object.
+    /// Used for hog-mode process identifiers.
+    /// </summary>
     [DllImport(CoreAudioLib, EntryPoint = "AudioObjectGetPropertyData")]
     internal static extern int AudioObjectGetPropertyData(
         uint inObjectID,
@@ -157,6 +205,10 @@ internal static class CoreAudioNativeMethods
         ref uint ioDataSize,
         out int outData);
 
+    /// <summary>
+    /// Reads a pointer-sized property value from a CoreAudio object.
+    /// Used for CFStringRef device UID values.
+    /// </summary>
     [DllImport(CoreAudioLib, EntryPoint = "AudioObjectGetPropertyData")]
     internal static extern int AudioObjectGetPropertyData(
         uint inObjectID,
@@ -166,21 +218,40 @@ internal static class CoreAudioNativeMethods
         ref uint ioDataSize,
         out IntPtr outData);
 
+    /// <summary>
+    /// Gets the current thread's run loop.
+    /// Reference: SDL_coreaudio.m AudioQueueThreadEntry -> CFRunLoopGetCurrent.
+    /// </summary>
     [DllImport(CoreFoundationLib, EntryPoint = "CFRunLoopGetCurrent")]
     internal static extern IntPtr CFRunLoopGetCurrent();
 
+    /// <summary>
+    /// Runs the current thread's run loop for a bounded interval.
+    /// Reference: SDL_coreaudio.m AudioQueueThreadEntry -> CFRunLoopRunInMode.
+    /// </summary>
     [DllImport(CoreFoundationLib, EntryPoint = "CFRunLoopRunInMode")]
     internal static extern int CFRunLoopRunInMode(
         IntPtr mode,
         double seconds,
         byte returnAfterSourceHandled);
 
+    /// <summary>
+    /// Gets the main run loop.
+    /// Present for completeness alongside the other run-loop bindings.
+    /// </summary>
     [DllImport(CoreFoundationLib, EntryPoint = "CFRunLoopGetMain")]
     internal static extern IntPtr CFRunLoopGetMain();
 
+    /// <summary>
+    /// Releases a CoreFoundation object retained by a property query.
+    /// </summary>
     [DllImport(CoreFoundationLib, EntryPoint = "CFRelease")]
     internal static extern void CFRelease(IntPtr cf);
 
+    /// <summary>
+    /// Loads the global kCFRunLoopDefaultMode symbol.
+    /// Reference: SDL_coreaudio.m AudioQueueThreadEntry uses kCFRunLoopDefaultMode.
+    /// </summary>
     internal static IntPtr GetDefaultRunLoopMode()
     {
         IntPtr lib = NativeLibrary.Load(CoreFoundationLib);
@@ -188,6 +259,9 @@ internal static class CoreAudioNativeMethods
         return Marshal.ReadIntPtr(symbolAddr);
     }
 
+    /// <summary>
+    /// Creates a CoreAudio property-address struct with the main element filled in.
+    /// </summary>
     internal static AudioObjectPropertyAddress CreatePropertyAddress(uint selector, uint scope)
     {
         return new AudioObjectPropertyAddress
@@ -200,8 +274,8 @@ internal static class CoreAudioNativeMethods
 }
 
 /// <summary>
-/// CoreAudio / AudioToolbox constants.
-/// Reference: CoreAudioTypes.h, AudioQueue.h
+/// CoreAudio and AudioToolbox constants used by the managed macOS playback port.
+/// References: CoreAudioTypes.h, AudioHardwareBase.h, AudioQueue.h, SDL_coreaudio.m.
 /// </summary>
 internal static class CoreAudioConstants
 {
@@ -248,9 +322,16 @@ internal static class CoreAudioConstants
 /// Pure managed helper for SDL3 CoreAudio buffer-count policy.
 /// SDL3 uses three buffers by default and scales up only when the callback
 /// period is smaller than the minimum buffer time target.
+/// Reference: SDL/src/audio/coreaudio/SDL_coreaudio.m PrepareAudioQueue.
 /// </summary>
 internal static class CoreAudioBufferPolicy
 {
+    /// <summary>
+    /// Computes the number of AudioQueue buffers SDL3 would allocate for playback.
+    /// </summary>
+    /// <param name="sampleRate">Playback sample rate in Hz.</param>
+    /// <param name="bufferFrames">Frames per callback period.</param>
+    /// <returns>The number of queue buffers to allocate.</returns>
     public static int ComputeAudioBufferCount(int sampleRate, int bufferFrames)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sampleRate);

@@ -6,24 +6,30 @@ using System.Runtime.Versioning;
 using Spice86.Audio.Backend.Audio.CrossPlatform.Sdl.Mac.CoreAudio;
 
 /// <summary>
-/// SDL audio backend for macOS using CoreAudio (AudioQueue).
-/// Reference: DOSBox Staging's SDL audio integration (mixer.cpp)
+/// SDL-style audio backend for macOS using CoreAudio AudioQueue.
+/// Mirrors the playback-only path of SDL3's CoreAudio backend in
+/// SDL/src/audio/coreaudio/SDL_coreaudio.m as closely as the managed
+/// Spice86.Audio abstraction allows.
 /// 
-/// NOTE: CoreAudio uses ProvidesOwnCallbackThread. The AudioQueue manages
-/// its own callback thread via CFRunLoop, so the SdlAudioDevice thread
-/// is mostly idle. The outputCallback (in SdlCoreAudioDriver) directly
-/// fills audio buffers from the user callback.
+/// Actual usage in this repository is narrower than SDL3 itself:
+/// playback only, default-device selection only, and a managed float callback
+/// contract that is translated into the backend's native queue model.
 /// </summary>
 [SupportedOSPlatform("osx")]
-public sealed class SdlMacBackend : IAudioBackend {
+public sealed class SdlMacBackend : IAudioBackend
+{
     private readonly SdlAudioDevice _device;
     private AudioDeviceState _state = AudioDeviceState.Stopped;
     private string? _lastError;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SdlMacBackend"/> class.
+    /// The backend delegates SDL-style device lifecycle management to
+    /// <see cref="SdlAudioDevice"/> and CoreAudio-specific queue control to
+    /// <see cref="SdlCoreAudioDriver"/>.
     /// </summary>
-    public SdlMacBackend() {
+    public SdlMacBackend()
+    {
         _device = new SdlAudioDevice(new SdlCoreAudioDriver());
     }
 
@@ -37,11 +43,13 @@ public sealed class SdlMacBackend : IAudioBackend {
     public string? LastError => _lastError;
 
     /// <inheritdoc/>
-    public bool Open(AudioSpec desiredSpec) {
+    public bool Open(AudioSpec desiredSpec)
+    {
         ArgumentNullException.ThrowIfNull(desiredSpec);
         ArgumentNullException.ThrowIfNull(desiredSpec.Callback);
 
-        if (!_device.Open(desiredSpec)) {
+        if (!_device.Open(desiredSpec))
+        {
             _lastError = _device.LastError;
             _state = AudioDeviceState.Error;
             return false;
@@ -52,8 +60,10 @@ public sealed class SdlMacBackend : IAudioBackend {
     }
 
     /// <inheritdoc/>
-    public void Start() {
-        if (_state == AudioDeviceState.Playing) {
+    public void Start()
+    {
+        if (_state == AudioDeviceState.Playing)
+        {
             return;
         }
 
@@ -62,8 +72,10 @@ public sealed class SdlMacBackend : IAudioBackend {
     }
 
     /// <inheritdoc/>
-    public void Pause() {
-        if (_state != AudioDeviceState.Playing) {
+    public void Pause()
+    {
+        if (_state != AudioDeviceState.Playing)
+        {
             return;
         }
 
@@ -72,13 +84,15 @@ public sealed class SdlMacBackend : IAudioBackend {
     }
 
     /// <inheritdoc/>
-    public void Close() {
+    public void Close()
+    {
         _device.Close();
         _state = AudioDeviceState.Stopped;
     }
 
     /// <inheritdoc/>
-    public void Dispose() {
+    public void Dispose()
+    {
         Close();
     }
 }
