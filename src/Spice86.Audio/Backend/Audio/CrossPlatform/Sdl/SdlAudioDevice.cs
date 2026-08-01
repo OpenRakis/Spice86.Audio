@@ -56,6 +56,14 @@ internal sealed class SdlAudioDevice
     internal bool ShutdownRequested => _shutdown;
 
     /// <summary>
+    /// Gets the device-level mixer lock.
+    /// Reference: SDL_audio.c device->lock, which drivers acquire through
+    /// SDL_PlaybackAudioThreadIterate. Drivers that provide their own callback
+    /// thread lock this same object instead of using a private lock.
+    /// </summary>
+    internal object MixerLock => _mixerLock;
+
+    /// <summary>
     /// Whether the device is enabled.
     /// Reference: SDL_AtomicGet(&amp;device-&gt;enabled)
     /// </summary>
