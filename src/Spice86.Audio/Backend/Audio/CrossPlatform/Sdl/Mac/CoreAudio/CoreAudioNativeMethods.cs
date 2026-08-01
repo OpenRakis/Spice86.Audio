@@ -180,6 +180,17 @@ internal static class CoreAudioNativeMethods
         uint inDataSize);
 
     /// <summary>
+    /// Gets an AudioQueue property into unmanaged storage.
+    /// Used to read the queue's effective stream description after creation.
+    /// </summary>
+    [DllImport(AudioToolboxLib, EntryPoint = "AudioQueueGetProperty")]
+    internal static extern int AudioQueueGetProperty(
+        IntPtr inAQ,
+        uint inID,
+        IntPtr outData,
+        ref uint ioDataSize);
+
+    /// <summary>
     /// Reads a UInt32 property value from a CoreAudio object.
     /// Used for default device identifiers and boolean-style device flags.
     /// </summary>
@@ -288,6 +299,7 @@ internal static class CoreAudioConstants
     internal const uint LinearPcmFormatFlagIsPacked = 1 << 3;
     internal const uint AudioQueuePropertyChannelLayout = 0x61716368;
     internal static readonly uint AudioQueuePropertyCurrentDevice = MakeFourCc("aqcd");
+    internal static readonly uint AudioQueuePropertyStreamDescription = MakeFourCc("aqft");
     internal static readonly uint AudioHardwarePropertyDefaultOutputDevice = MakeFourCc("dOut");
     internal static readonly uint AudioDevicePropertyDeviceUid = MakeFourCc("uid ");
     internal static readonly uint AudioDevicePropertyDeviceIsAlive = MakeFourCc("livn");
