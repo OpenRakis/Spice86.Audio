@@ -513,7 +513,7 @@ dotnet test tests/Spice86.Audio.Tests
 
 ## License and Credits
 
-The `Spice86.Audio` library itself is licensed under the [Apache License 2.0](LICENSE).
+Project-authored `Spice86.Audio` code is licensed under the [Apache License 2.0](LICENSE). Ports and dependencies retain the licenses listed below.
 
 It incorporates C# ports of the following third-party components:
 
@@ -523,17 +523,13 @@ It incorporates C# ports of the following third-party components:
 - Full thanks to the SDL team for their outstanding cross-platform multimedia library.
 
 ### DOSBox Staging
-- **License:** [GNU GPL v2.0](LICENSE.DOSBOXSTAGING)
-- The mixer architecture, `RWQueue<T>`, `AudioFrame`, chorus engine (TAL-NoiseMaker integration), noise gate, MVerb reverb, compressor, and resampling pipeline are all faithful ports of DOSBox Staging's audio subsystem (`src/audio/`, `src/utils/rwqueue.*`).
+- **License:** [GNU GPL v2.0 or later](LICENSE.DOSBOXSTAGING)
+- `RWQueue<T>`, `AudioFrame`, shared audio configuration types, the chorus engine, noise gate, and compressor are ports of DOSBox Staging's audio subsystem (`src/audio/`, `src/utils/rwqueue.*`).
 - Full thanks to the DOSBox Staging team and the original DOSBox team.
 
-### IIR Filters (iir1)
-- **License:** MIT / GPL v3 (see [`src/Spice86.Audio/Filters/IirFilters/LICENSE`](src/Spice86.Audio/Filters/IirFilters/LICENSE))
-- Port of [iir1](https://github.com/berndporr/iir1) by Vinnie Falco (original DSPFilters) and Bernd Porr.
-
-### Speex Resampler (libspeex)
-- **License:** BSD-style (see libspeex source headers)
-- Port of the Speex resampler by Jean-Marc Valin and the Speex project.
+### Iir1.Net / iir1
+- **License:** MIT; the [`Iir1.Net`](https://github.com/codengine/Iir1.Net) package includes its own license and the preserved upstream iir1 license.
+- `NoiseGate` uses `Iir1.Net`, a managed port of [iir1](https://github.com/berndporr/iir1) by Vinnie Falco and Bernd Porr.
 
 ### TAL-NoiseMaker (Chorus & DCBlock)
 - **License:** [GNU GPL v2.0](https://www.gnu.org/licenses/gpl-2.0.html)
@@ -543,7 +539,4 @@ It incorporates C# ports of the following third-party components:
 - **License:** BSD-style (see `Compressor.cs` header)
 - `Compressor` is a port of Thomas Scott Stillwell's "Master Tom Compressor" JSFX effect.
 
-### Additional contributors
-Work from Patrick Kunz, Martin Eastwood, and John Novak has also been ported. See individual source file headers for details.
-
-Please see the respective LICENSE files at the root of this repository for the full license texts.
+See the linked license files, dependency package notices, and individual source headers for the applicable terms and attribution.

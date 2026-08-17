@@ -202,8 +202,11 @@
    limitations under the License.
 
 
-   Third-party libraries are licensed as followed:
-   - Adlib Gold: Personal permission granted by John Novak from DosBox Staging
-   - Nuked-OPL3: LGPL-2.1
-   - iir1: MIT
-   - YM7128B_emu: BSD 2-Clause
+   Third-party components retain their respective licenses:
+   - SDL-derived audio backends: zlib; see LICENSE.SDL and CREDITS.SDL.
+   - DOSBox Staging-derived audio code: GPL-2.0-or-later; see
+     LICENSE.DOSBOXSTAGING and individual source headers.
+   - Iir1.Net and upstream iir1: MIT; the dependency package includes both
+     license notices and its third-party notice.
+   - TAL-NoiseMaker chorus code: GPL-2.0; see individual source headers.
+   - Master Tom Compressor: BSD-style terms; see Compressor.cs.

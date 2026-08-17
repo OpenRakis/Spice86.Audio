@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Reference: src/audio/private/noise_gate.h and noise_gate.cpp
 
+using Iir.Butterworth;
+
 namespace Spice86.Audio.Filters;
 
 using Spice86.Audio.Common;
-using Spice86.Audio.Filters.IirFilters.Filters.Butterworth;
+
 
 /// <summary>
 /// Implements a simple noise gate that mutes the signal below a given threshold.
