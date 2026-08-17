@@ -9,6 +9,7 @@
         <PackageId>Spice86.Audio</PackageId>
     </PropertyGroup>
     <ItemGroup>
+      <PackageReference Include="Iir1.Net" />
       <PackageReference Include="Spice86.Shared" />
     </ItemGroup>
 </Project>
