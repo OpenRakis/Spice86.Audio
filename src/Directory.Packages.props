@@ -5,7 +5,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="Iir1.Net" Version="1.0.0" />
-    <PackageVersion Include="Spice86.Shared" Version="11.1.0" />
+    <PackageVersion Include="Spice86.Shared" Version="16.1.0" />
     <PackageVersion Include="FluentAssertions" Version="8.4.0" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />
